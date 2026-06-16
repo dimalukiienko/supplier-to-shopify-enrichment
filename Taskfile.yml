@@ -1,0 +1,154 @@
+# Taskfile for the supplier-to-Shopify enrichment monorepo.
+# Every task is a thin wrapper over commands documented in README.md.
+# Install go-task: https://taskfile.dev  •  List tasks: `task --list`
+version: '3'
+
+tasks:
+  default:
+    desc: List all available tasks
+    cmds:
+      - task --list
+    silent: true
+
+  setup:
+    desc: Onboarding with a local Supabase — .env, installs, DB up + migrated, types
+    cmds:
+      - task: env-file
+      - task: install
+      - task: db:start
+      - task: db:reset
+      - task: env:sync
+      - task: gen:types
+      - cmd: |
+          echo ""
+          echo "✓ Setup complete. Add OPENAI_API_KEY (or ANTHROPIC_API_KEY) to .env, then run: task dev"
+        silent: true
+
+  setup:cloud:
+    desc: 'Onboarding against a hosted Supabase project (usage: task setup:cloud -- <project-ref>)'
+    cmds:
+      - task: env-file
+      - task: install
+      - task: db:link
+      - task: db:migrate
+      - cmd: |
+          echo ""
+          echo "✓ Linked and migrations pushed. In .env set the hosted project's"
+          echo "  NEXT_PUBLIC_SUPABASE_URL / _ANON_KEY / SUPABASE_SERVICE_ROLE_KEY"
+          echo "  (from the Supabase dashboard) plus your LLM key, then run: task dev"
+        silent: true
+
+  env-file:
+    desc: Create .env from .env.example (skips if .env already exists)
+    cmds:
+      - cp .env.example .env
+    status:
+      - test -f .env
+
+  env:sync:
+    desc: Write the live local Supabase URL/keys/DATABASE_URL into .env
+    deps:
+      - db:start
+    cmds:
+      - bash scripts/sync-env.sh
+
+  install:
+    desc: Install everything — JS workspace (web + packages) and the Python worker
+    cmds:
+      - pnpm install
+      - task: install:worker
+
+  install:worker:
+    desc: Install just the Python worker dependencies (uv)
+    dir: apps/worker
+    cmds:
+      - uv sync
+
+  dev:
+    desc: Run web (:3000) + worker together (Supabase must already be up)
+    deps:
+      - web
+      - worker
+
+  web:
+    desc: Run the Next.js reviewer UI + BFF dev server (http://localhost:3000)
+    cmds:
+      - pnpm --filter @repo/web dev
+
+  worker:
+    desc: Run the enrichment worker (drains the jobs queue)
+    dir: apps/worker
+    cmds:
+      - uv run worker
+
+  db:start:
+    desc: Boot the local Supabase stack (needs Docker)
+    cmds:
+      - pnpm exec supabase start
+
+  db:stop:
+    desc: Stop the local Supabase stack
+    cmds:
+      - pnpm exec supabase stop
+
+  db:status:
+    desc: Re-print the local Supabase URL + anon/service keys
+    cmds:
+      - pnpm exec supabase status
+
+  db:reset:
+    desc: Re-apply all local migrations + seed.sql against a clean DB
+    cmds:
+      - pnpm exec supabase db reset
+
+  db:migration:
+    desc: 'Create a new empty migration (usage: task db:migration -- <name>)'
+    cmds:
+      - pnpm exec supabase migration new {{.CLI_ARGS}}
+
+  db:link:
+    desc: 'Authenticate + link this repo to a hosted project (usage: task db:link -- <project-ref>)'
+    cmds:
+      - pnpm exec supabase login
+      - pnpm exec supabase link --project-ref {{.CLI_ARGS}}
+
+  db:migrate:
+    desc: Push local migrations to the linked remote project (supabase db push)
+    cmds:
+      - pnpm exec supabase db push
+
+  gen:types:
+    desc: Regenerate the Supabase TypeScript types in @repo/db
+    cmds:
+      - pnpm --filter @repo/db gen:types
+
+  lint:
+    desc: Lint the JS workspace
+    cmds:
+      - pnpm turbo run lint
+
+  type-check:
+    desc: Type-check the JS workspace
+    cmds:
+      - pnpm turbo run type-check
+
+  build:
+    desc: Build the JS workspace
+    cmds:
+      - pnpm turbo run build
+
+  check:
+    desc: Run the full local pre-PR gate (mirrors CI)
+    cmds:
+      - pnpm turbo run lint type-check build
+      - task: check:worker
+      - task: gen:types
+      - git diff --exit-code packages/db/src/types.gen.ts
+
+  check:worker:
+    desc: Run the worker lint/type-check/test suite
+    dir: apps/worker
+    cmds:
+      - uv run ruff check .
+      - uv run mypy
+      - uv run pytest
