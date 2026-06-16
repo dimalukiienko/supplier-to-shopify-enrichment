@@ -32,8 +32,12 @@ data/         sample supplier inputs
 | pnpm | 11+ | JS workspace package manager |
 | Python | 3.12+ | worker runtime |
 | [uv](https://docs.astral.sh/uv/) | latest | Python dependency manager |
-| [Supabase CLI](https://supabase.com/docs/guides/cli) | latest | local Postgres + migrations |
-| Docker | — | required by the Supabase CLI |
+| Docker | — | required to run the local Supabase stack |
+
+> The [Supabase CLI](https://supabase.com/docs/guides/cli) is **not** a global
+> install — it ships as a pinned dev dependency (`supabase` in the root
+> `package.json`). `pnpm install` provides it, and every command in this README
+> invokes it as `pnpm exec supabase …` so everyone uses the same CLI version.
 
 ## 1. Initialize
 
@@ -53,9 +57,9 @@ cd apps/worker && uv sync && cd ../..
 Copy `.env.example` to `.env` and set:
 
 - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` — printed by
-  `supabase start` (see below).
-- `SUPABASE_SERVICE_ROLE_KEY` — also from `supabase start`; used by the BFF and
-  the worker (both bypass RLS).
+  `pnpm exec supabase start` (see below).
+- `SUPABASE_SERVICE_ROLE_KEY` — also from `pnpm exec supabase start`; used by the
+  BFF and the worker (both bypass RLS).
 - `DATABASE_URL` — direct Postgres connection for the worker's job poller.
 - `OPENAI_API_KEY` (or `ANTHROPIC_API_KEY`) — LLM provider for the graph nodes.
 - `WEB_SEARCH_API_KEY` — optional, for the `research` node.
@@ -63,51 +67,60 @@ Copy `.env.example` to `.env` and set:
 ## 2. Initialize Supabase and run migrations
 
 This repo already contains the Supabase CLI project under `supabase/`, so you do
-not need to run `supabase init`.
+not need to run `supabase init`. Run all commands from the repo root.
 
 ### Local database
 
 ```bash
-# From the repo root:
-supabase start
-supabase db reset
+pnpm exec supabase start          # boot the local stack (needs Docker)
+pnpm exec supabase db reset       # apply all migrations + seed.sql
 ```
 
-1. `supabase start` boots local Postgres and prints the local API URL plus the
-   anon and service role keys.
+1. `pnpm exec supabase start` boots local Postgres and prints the local API URL
+   plus the anon and service role keys. Re-print them anytime with
+   `pnpm exec supabase status`.
 2. Copy those printed values into `.env` as `NEXT_PUBLIC_SUPABASE_URL`,
    `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`.
 3. Set `DATABASE_URL` to the local Postgres connection string printed by
-   `supabase start`.
-4. `supabase db reset` applies every migration in `supabase/migrations/`, then
-   loads `supabase/seed.sql`.
+   `pnpm exec supabase start`.
+4. `pnpm exec supabase db reset` applies every migration in
+   `supabase/migrations/`, then loads `supabase/seed.sql`.
 
-Supabase Studio is available at http://127.0.0.1:54323 after `supabase start`.
+Supabase Studio is available at http://127.0.0.1:54323 once the stack is up.
+Stop the stack with `pnpm exec supabase stop` (add `--no-backup` to also drop
+local data).
 
-### Linked remote project
+#### Changing the schema
 
-Use this flow when you want to apply the committed migrations to a hosted
-Supabase project.
+Migrations under `supabase/migrations/` are the source of truth. To evolve the
+schema:
 
 ```bash
-# Authenticate the CLI once per machine.
-supabase login
+pnpm exec supabase migration new <name>   # create an empty timestamped migration
+# ...write SQL in the new file...
+pnpm exec supabase db reset               # re-apply everything against a clean DB
+pnpm --filter @repo/db gen:types          # regenerate TS types from the new schema
+```
 
-# Link this repo to the hosted Supabase project once.
-supabase link --project-ref <project-ref>
+### Linked remote (cloud) project
 
-# Push local migrations to the linked remote project.
-pnpm db:migrate
+Use this flow to apply the committed migrations to a hosted Supabase project.
+
+```bash
+pnpm exec supabase login                            # authenticate once per machine
+pnpm exec supabase link --project-ref <project-ref> # link this repo to the project once
+pnpm exec supabase db push                          # push local migrations to the remote
 ```
 
 1. Create or choose a Supabase project in the Supabase dashboard.
 2. Copy its project ref from the dashboard URL or project settings.
-3. Run `supabase link --project-ref <project-ref>` from the repo root.
-4. Run `pnpm db:migrate`, which calls `supabase db push` and applies the local
-   migrations to the linked remote project.
+3. Run `pnpm exec supabase link --project-ref <project-ref>` from the repo root.
+4. Run `pnpm exec supabase db push` (or the `pnpm db:migrate` alias) to apply the
+   local migrations to the linked remote project. Check what is applied with
+   `pnpm exec supabase migration list --linked`.
 
-For non-interactive environments, set `SUPABASE_ACCESS_TOKEN` instead of running
-`supabase login`.
+For non-interactive environments (CI, scripts), set `SUPABASE_ACCESS_TOKEN`
+instead of running `pnpm exec supabase login`.
 
 ## 3. Run
 
@@ -136,19 +149,26 @@ uv run worker                          # start the poller
 uv run pytest                          # tests (incl. model↔schema contract)
 uv run ruff check . && uv run mypy     # lint + type-check
 
-# --- Database ---
-supabase start                         # start local Supabase services
-supabase db reset                      # re-apply all local migrations + seed
-supabase link --project-ref <ref>      # link this repo to a hosted project
-pnpm db:migrate                        # push migrations to the linked remote project
-supabase migration new <name>          # create a new migration
+# --- Database: local (run from repo root) ---
+pnpm exec supabase start               # start local Supabase services (needs Docker)
+pnpm exec supabase stop                # stop local services
+pnpm exec supabase status              # re-print local URL + anon/service keys
+pnpm exec supabase db reset            # re-apply all local migrations + seed
+pnpm exec supabase migration new <name># create a new migration
+pnpm exec supabase migration list      # list local migrations
+
+# --- Database: cloud / linked project ---
+pnpm exec supabase login                     # authenticate the CLI once per machine
+pnpm exec supabase link --project-ref <ref>  # link this repo to a hosted project
+pnpm db:migrate                              # push migrations to the linked remote project
+pnpm exec supabase migration list --linked   # compare local vs. remote migrations
 
 # --- Evals ---
 npx promptfoo@latest eval -c evals/promptfooconfig.yaml
 ```
 
 > `pnpm db:migrate` runs `supabase db push`, which targets the hosted project
-> linked with `supabase link --project-ref <ref>`.
+> linked with `pnpm exec supabase link --project-ref <ref>`.
 
 ## Type safety & schema
 
