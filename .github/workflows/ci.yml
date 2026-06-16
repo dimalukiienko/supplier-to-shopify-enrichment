@@ -36,7 +36,11 @@ jobs:
       - run: pnpm exec supabase start
       - run: pnpm exec supabase db reset
       # Regenerate TS types and fail if they drift from what's committed.
+      # `gen types --local` insists on a token's presence even though it never
+      # contacts the API for a local DB; supply a dummy so CI needs no secret.
       - run: pnpm --filter @repo/db gen:types
+        env:
+          SUPABASE_ACCESS_TOKEN: dummy
       - run: git diff --exit-code packages/db/src/types.gen.ts
 
   worker:
