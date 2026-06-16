@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  web:
+    name: Web + packages (pnpm/turbo)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo run lint type-check build
+
+  schema:
+    name: Supabase migrations + type drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Use the pinned CLI from the workspace for every supabase command so the
+      # running stack and the type generator are the same version.
+      # Apply every migration + seed against a clean local DB.
+      - run: pnpm exec supabase start
+      - run: pnpm exec supabase db reset
+      # Regenerate TS types and fail if they drift from what's committed.
+      # `gen types --local` insists on a token's presence even though it never
+      # contacts the API for a local DB; supply a dummy so CI needs no secret.
+      - run: pnpm --filter @repo/db gen:types
+        env:
+          SUPABASE_ACCESS_TOKEN: dummy
+      - run: git diff --exit-code packages/db/src/types.gen.ts
+
+  worker:
+    name: Worker (uv)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/worker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync --all-extras --dev
+      - run: uv run ruff check .
+      - run: uv run mypy
+      # Includes the model↔schema contract test (tests/test_model_contract.py).
+      - run: uv run pytest
