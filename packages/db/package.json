@@ -9,7 +9,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "gen:types": "supabase gen types typescript --db-url postgresql://postgres:postgres@127.0.0.1:54322/postgres > src/types.gen.ts",
+    "gen:types": "supabase gen types typescript --local > src/types.gen.ts",
     "type-check": "tsc --noEmit",
     "lint": "eslint ."
   },
