@@ -24,18 +24,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: supabase/setup-cli@v1
-        with:
-          version: latest
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version-file: .node-version
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # Use the pinned CLI from the workspace for every supabase command so the
+      # running stack and the type generator are the same version.
       # Apply every migration + seed against a clean local DB.
-      - run: supabase start
-      - run: supabase db reset
+      - run: pnpm exec supabase start
+      - run: pnpm exec supabase db reset
       # Regenerate TS types and fail if they drift from what's committed.
       - run: pnpm --filter @repo/db gen:types
       - run: git diff --exit-code packages/db/src/types.gen.ts
