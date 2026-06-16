@@ -1,0 +1,19 @@
+# Promptfoo config — offline evaluation of prompts / graph behavior against the
+# dataset (docs/ARCHITECTURE.md §7). Placeholder wiring; prompts and assertions are
+# filled in as the graph nodes are implemented.
+description: "Supplier-to-Shopify enrichment evals"
+
+prompts:
+  - "Draft a Shopify product title from: {{product_name}} (brand: {{brand}}, size: {{size}})"
+
+providers:
+  - id: openai:gpt-4o-mini
+
+tests:
+  - vars:
+      product_name: "mens cotton tee blk L"
+      brand: "Acme"
+      size: "L"
+    assert:
+      - type: llm-rubric
+        value: "Title is clean, title-cased, and contains the brand and size."
