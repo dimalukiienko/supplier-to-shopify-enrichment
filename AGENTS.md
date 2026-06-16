@@ -6,32 +6,40 @@ This repository defines the supplier-to-Shopify enrichment workflow: thin suppli
 
 Authoritative project docs:
 
-- `ARCHITECTURE.md` describes the Stage 1 application architecture and end-to-end enrichment flow.
-- `DATABASE.md` describes the Supabase/Postgres schema, queue tables, traces, settings, and relationships.
+- `docs/ARCHITECTURE.md` describes the Stage 1 application architecture and end-to-end enrichment flow.
+- `docs/DATABASE.md` describes the Supabase/Postgres schema, queue tables, traces, settings, and relationships.
 - `docs/architecture.drawio` is the editable architecture diagram.
 - `data/products_input.csv` and `data/products_input.xlsx` are the sample supplier inputs.
 
 ## When To Read Docs
 
-- Read `ARCHITECTURE.md` before changing module boundaries, system flow, worker behavior, review workflow, Shopify publishing behavior, or external-service responsibilities.
-- Read `DATABASE.md` before changing schemas, migrations, query behavior, enrichment persistence, product/variant modeling, job queue logic, or trace/run records.
+- Read `docs/ARCHITECTURE.md` before changing module boundaries, system flow, worker behavior, review workflow, Shopify publishing behavior, or external-service responsibilities.
+- Read `docs/DATABASE.md` before changing schemas, migrations, query behavior, enrichment persistence, product/variant modeling, job queue logic, or trace/run records.
 - Check `docs/architecture.drawio` when architecture documentation and diagrams need to stay aligned.
 
 ## Current Implementation State
 
-- The repository currently contains architecture/database documentation, sample data, AI-work hooks, and diagrams.
-- Do not assume a Next.js, Python, Supabase, or LangGraph codebase already exists unless the relevant files have been added.
-- When adding implementation, follow the stack described in `ARCHITECTURE.md` unless the user explicitly changes direction.
+- The repository contains the monorepo **foundation**: workspace tooling, app/package scaffolds, Supabase migrations, and CI — but business logic (graph nodes, BFF handlers, review UI) is still stubbed.
+- Structure and conventions are documented in `docs/MONOREPO.md`:
+  - `apps/web` — Next.js (App Router) frontend + BFF route handlers.
+  - `apps/worker` — Python + LangGraph enrichment worker (uv-managed); graph/pipeline/poller bodies are stubs.
+  - `packages/db` — `@repo/db`: generated Supabase TS types + domain aliases.
+  - `packages/config-ts`, `packages/config-eslint` — shared TS/ESLint config.
+  - `supabase/` — migrations (the schema source of truth) + `seed.sql`.
+- When adding implementation, follow the stack described in `docs/ARCHITECTURE.md` and the conventions in `docs/MONOREPO.md` unless the user explicitly changes direction.
 
 ## Development Rules
 
 - Keep changes scoped to the user's request.
-- Preserve source-of-truth documentation when adding code: update `ARCHITECTURE.md` or `DATABASE.md` if implementation decisions change the documented architecture or schema.
+- Preserve source-of-truth documentation when adding code: update `docs/ARCHITECTURE.md` or `docs/DATABASE.md` if implementation decisions change the documented architecture or schema.
 - Keep generated or local AI-work history under `docs/ai-work-history/` unless the user asks to modify it.
 - Do not mutate sample data files unless the task is specifically about input data or fixtures.
 
 ## Validation
 
-- There is no standard build or test command in the repository yet.
 - For documentation-only changes, review Markdown rendering and links.
-- When application code is added later, document the relevant install, build, lint, and test commands here.
+- JS/TS (root): `pnpm install`, then `pnpm turbo run lint type-check build`.
+- Supabase TS types: `pnpm --filter @repo/db gen:types` (CI fails on drift vs the committed `types.gen.ts`).
+- Worker (from `apps/worker`): `uv sync`, then `uv run ruff check .`, `uv run mypy`, `uv run pytest` (pytest includes the model↔schema contract test).
+- Migrations: `supabase start && supabase db reset` applies all migrations + `seed.sql` against a clean local DB.
+- CI (`.github/workflows/ci.yml`) runs the JS, schema/type-drift, and worker checks on every PR.
