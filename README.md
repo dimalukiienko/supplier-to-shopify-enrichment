@@ -60,15 +60,54 @@ Copy `.env.example` to `.env` and set:
 - `OPENAI_API_KEY` (or `ANTHROPIC_API_KEY`) — LLM provider for the graph nodes.
 - `WEB_SEARCH_API_KEY` — optional, for the `research` node.
 
-## 2. Start the database
+## 2. Initialize Supabase and run migrations
+
+This repo already contains the Supabase CLI project under `supabase/`, so you do
+not need to run `supabase init`.
+
+### Local database
 
 ```bash
-supabase start          # boots local Postgres, prints the URL + anon/service keys
-supabase db reset       # applies all migrations in supabase/migrations + seed.sql
+# From the repo root:
+supabase start
+supabase db reset
 ```
 
-`supabase start` prints the values for the Supabase env vars above. Supabase
-Studio is available at http://127.0.0.1:54323.
+1. `supabase start` boots local Postgres and prints the local API URL plus the
+   anon and service role keys.
+2. Copy those printed values into `.env` as `NEXT_PUBLIC_SUPABASE_URL`,
+   `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`.
+3. Set `DATABASE_URL` to the local Postgres connection string printed by
+   `supabase start`.
+4. `supabase db reset` applies every migration in `supabase/migrations/`, then
+   loads `supabase/seed.sql`.
+
+Supabase Studio is available at http://127.0.0.1:54323 after `supabase start`.
+
+### Linked remote project
+
+Use this flow when you want to apply the committed migrations to a hosted
+Supabase project.
+
+```bash
+# Authenticate the CLI once per machine.
+supabase login
+
+# Link this repo to the hosted Supabase project once.
+supabase link --project-ref <project-ref>
+
+# Push local migrations to the linked remote project.
+pnpm db:migrate
+```
+
+1. Create or choose a Supabase project in the Supabase dashboard.
+2. Copy its project ref from the dashboard URL or project settings.
+3. Run `supabase link --project-ref <project-ref>` from the repo root.
+4. Run `pnpm db:migrate`, which calls `supabase db push` and applies the local
+   migrations to the linked remote project.
+
+For non-interactive environments, set `SUPABASE_ACCESS_TOKEN` instead of running
+`supabase login`.
 
 ## 3. Run
 
@@ -98,17 +137,18 @@ uv run pytest                          # tests (incl. model↔schema contract)
 uv run ruff check . && uv run mypy     # lint + type-check
 
 # --- Database ---
+supabase start                         # start local Supabase services
+supabase db reset                      # re-apply all local migrations + seed
+supabase link --project-ref <ref>      # link this repo to a hosted project
 pnpm db:migrate                        # push migrations to the linked remote project
 supabase migration new <name>          # create a new migration
-supabase db reset                      # re-apply all migrations + seed
 
 # --- Evals ---
 npx promptfoo@latest eval -c evals/promptfooconfig.yaml
 ```
 
-> `pnpm db:migrate` runs `supabase db push`, which targets a **linked** project.
-> Link it once first: `supabase link --project-ref <ref>` (with
-> `SUPABASE_ACCESS_TOKEN` set).
+> `pnpm db:migrate` runs `supabase db push`, which targets the hosted project
+> linked with `supabase link --project-ref <ref>`.
 
 ## Type safety & schema
 
