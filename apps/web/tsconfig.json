@@ -1,7 +1,6 @@
 {
   "extends": "@repo/config-ts/nextjs.json",
   "compilerOptions": {
-    "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
     }
