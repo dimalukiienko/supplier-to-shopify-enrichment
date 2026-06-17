@@ -2,9 +2,11 @@
 
 Status snapshot for the next engineer/agent picking up this repo.
 
-- **Branch:** `feat/monorepo-foundation`
+- **Branch:** `feat/worker-core` (built on the merged `feat/monorepo-foundation`)
 - **Stage:** Stage 1 vertical slice (`enrich → human review → publish`)
-- **Current state:** monorepo **foundation is complete and CI-green**; business logic is **scaffolded but stubbed**.
+- **Current state:** monorepo foundation + the **enrichment worker core are
+  implemented and verified end-to-end**; the BFF API and reviewer UI are still
+  scaffold-only.
 
 Read first: `docs/ARCHITECTURE.md` (flow + built-vs-deferred), `docs/DATABASE.md`
 (schema source of truth), `docs/MONOREPO.md` (conventions). This file only
@@ -38,34 +40,58 @@ summarizes status — those docs are authoritative.
 - Worker Pydantic models (`apps/worker/src/worker/models/`) are kept in sync with
   the schema by a contract test (`tests/test_model_contract.py`).
 
-### Apps — scaffolded only
+### Worker — enrichment core (`apps/worker`) — **implemented**
+The full job → cluster → enrich → persist path runs end-to-end:
+- **Infra modules:** `db.py` (psycopg, dict-row connection for the
+  `FOR UPDATE SKIP LOCKED` queue claim), `llm.py` (OpenAI JSON-mode wrapper — the
+  single LLM seam, returns token/latency telemetry), `research.py` (web-research
+  seam, **no-op in Stage 1**), `normalize.py` (size/cluster helpers).
+- **Pipeline:** `preprocess.py` clusters supplier rows into products + size
+  variants (keys off the size-stripped SKU) and enqueues one `enrich_product` job
+  per product; `fetch.py` builds `GraphState`; `persist.py` writes
+  `enriched_fields` (idempotent — replaces AI rows, keeps reviewer edits) + a
+  `runs` record and flips product/batch status.
+- **Graph:** `graph/builder.py` compiles a real LangGraph `StateGraph`
+  (`parse → research → draft → validate → assemble`); nodes in `graph/nodes.py`
+  produce title (rule-composed from `settings.title_template`), description,
+  vendor, product_type, tags, and SEO fields with per-field confidence/source,
+  recording per-node traces to `runs.node_traces`.
+- **Poller:** `poller.py::run_forever` claims jobs atomically, dispatches by type,
+  marks done/failed (`attempts`/`error`), and supports a `WORKER_DRAIN=true`
+  one-shot mode.
+- **Verified:** `ruff` + `mypy --strict` + `pytest` (18 tests incl. schema
+  contract, clustering, and a stubbed-LLM graph run) all green, plus a live
+  OpenAI end-to-end run on the sample CSV.
+
+### Apps — still scaffold-only
 - **`apps/web`** (Next.js App Router): layout, placeholder home page, Supabase
   browser/server clients, and a working `GET /api/health` route. Reviewer UI and
   most BFF route handlers are **not built**.
-- **`apps/worker`** (Python + LangGraph): package structure, config, models, and
-  graph/pipeline/poller module skeletons exist. All execution bodies are stubs.
 
 ---
 
 ## What remains to be done (Stage 1)
 
-These are the stubbed pieces that make up the actual vertical slice.
-
-### Worker — enrichment graph (`apps/worker/src/worker/`)
-All raise `NotImplementedError`:
-- **`graph/nodes.py`** — `parse`, `research`, `draft`, `validate`, `assemble`.
-- **`graph/builder.py`** — wire the nodes into the LangGraph.
-- **`pipeline/`** — `fetch.py`, `preprocess.py`, `persist.py` bodies.
-- **`poller.py`** — the `run_forever` claim/process loop
-  (`CLAIM_JOB_SQL` with `FOR UPDATE SKIP LOCKED` is already drafted as a
-  reference query; the loop around it is the work).
+The worker core is done (above); these are the remaining slice pieces.
 
 ### BFF — Next.js route handlers (`apps/web/src/app/api/`)
 Only `health` exists. Still needed (see `docs/ARCHITECTURE.md` §3):
-- `batches` / `products` / `fields` — CRUD + listing; upload enqueues jobs.
+- `batches` / `products` / `fields` — CRUD + listing; **upload** inserts a batch +
+  supplier_rows and enqueues a `cluster_batch` job. This replaces the dev-only
+  `apps/worker/scripts/seed_batch.py` harness (used today for verification).
 - `approve / push` — records approval, initiates Shopify push (**mocked** in
   Stage 1, path wired but does not hit live Shopify).
 - `settings` — read/write enrichment + prompt config.
+
+### Worker follow-ups (post-core, optional)
+- **Real web research:** `research.py::research_facts` is a no-op; wiring a search
+  tool would let thin rows ground brand/specs/barcode as `source="web"`. The
+  guardrail + `source` plumbing already supports it.
+- **Vendor for SKU-only brands:** when the brand lives only in the SKU prefix
+  (e.g. `RAP-` = Rapala) the LLM emits the raw prefix; a brand-code map or web
+  research would fix it. Reviewer-correctable meanwhile.
+- **Concurrency/retries:** the claim is `SKIP LOCKED`-safe for multiple workers,
+  but there is no retry/backoff policy on `failed` jobs yet.
 
 ### Reviewer UI (`apps/web/src/app`)
 - Batch upload & management (status via Realtime; retry failed products).
@@ -99,21 +125,30 @@ update `docs/ARCHITECTURE.md` / `docs/DATABASE.md` in the same change.
 - This is a **timeboxed Stage 1 slice** — the deferral list above exists to fit
   the timebox, not because the pieces are unimportant. Prefer a working
   end-to-end thin slice over breadth.
-- Field-level priority: build Title, Description, Vendor/brand, Product type,
-  Tags, and size-based Variants first (the "Built" rows in
-  `docs/ARCHITECTURE.md` §"Field-level build-vs-defer scope").
+- Field-level priority: the worker already drafts Title, Description,
+  Vendor/brand, Product type, Tags, and size-based Variants (the "Built" rows in
+  `docs/ARCHITECTURE.md` §"Field-level build-vs-defer scope"); surface those same
+  fields first in the reviewer UI.
 - The frontend must talk **only** to the BFF — never the DB or worker directly.
 - SQL migrations are the **single source of truth**; never hand-edit
   `types.gen.ts` (regenerate) and keep Pydantic models passing the contract test.
-- LLM provider is configurable: set `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` in
-  `.env` before running the worker.
+- LLM provider: the worker uses **OpenAI** today (set `OPENAI_API_KEY` in `.env`).
+  All model calls go through `apps/worker/src/worker/llm.py`, so switching to
+  Anthropic is confined to that module. `WorkerConfig` reads the **repo-root**
+  `.env` regardless of CWD.
 
 ## Getting oriented quickly
 
 ```bash
-task setup     # .env + installs + local Supabase up/migrated + types (needs Docker)
-task dev       # web (http://localhost:3000) + worker
-task check     # full pre-PR gate (mirrors CI)
+task setup            # .env + installs + local Supabase up/migrated + types (needs Docker)
+task check            # full pre-PR gate (mirrors CI)
+
+# Try the worker end-to-end (needs OPENAI_API_KEY in .env):
+task db:reset         # clean DB + seed settings/prompts
+task worker:seed-batch  # load data/products_input.csv → batch + rows + cluster job
+task worker:drain     # run the worker once, draining the queue, then exit
+
+task dev              # web (http://localhost:3000) + worker (long-running)
 ```
 
 Supabase Studio: http://127.0.0.1:54323 once the local stack is up.
