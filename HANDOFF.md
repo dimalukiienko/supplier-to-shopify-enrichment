@@ -75,10 +75,15 @@ The full reviewer slice runs against the worker output:
   request bodies validated with `zod` (`src/lib/schemas.ts`, `src/lib/api.ts`).
 - **Reviewer UI** (`apps/web/src/app`): batches dashboard + upload form; batch
   view with **live** status via Supabase Realtime (`BatchLive`); product review
-  page with per-field accept/override (`FieldRow`), variant table, and live
-  field streaming (`ReviewLive`); approve → push controls; settings editor.
+  page with per-field accept/override (`FieldEditable` in `SectionCard`-based
+  layout, fields described in `src/lib/productFields.ts`), variant table, and
+  live field streaming (`ReviewLive`); approve → push controls; settings editor.
   Server Components read **only** through the BFF (`src/lib/bff.ts`); the browser
   touches Supabase directly only for Realtime (anon key).
+- **UI shell & styling:** Tailwind v4 + PostCSS (`postcss.config.mjs`); an
+  `AppShell` nav with a dark/light `ThemeToggle` (no-flash theme script in
+  `layout.tsx`); route-level loading skeletons (`loading.tsx` + `PageSkeletons`)
+  driven by a `navigation-loading-store` + `TrackedLink`; `lucide-react` icons.
 - **DB access fix:** added `..._grants.sql` — RLS alone is not enough; PostgREST
   needs table `GRANT`s for `service_role` (BFF) and `anon` (Realtime). The worker
   (direct `postgres` connection) never needed them, so this surfaced here.
