@@ -2,6 +2,7 @@
 
 import worker
 from worker.graph import build_graph
+from worker.graph.builder import NODE_SEQUENCE
 from worker.models import FieldDraft
 
 
@@ -10,8 +11,11 @@ def test_package_imports() -> None:
 
 
 def test_graph_has_five_nodes() -> None:
-    # parse → research → draft → validate → assemble
-    assert len(build_graph()) == 5
+    names = [name for name, _ in NODE_SEQUENCE]
+    assert names == ["parse", "research", "draft", "validate", "assemble"]
+    # The compiled graph wires the same nodes (plus langgraph's start/end).
+    compiled_nodes = set(build_graph().get_graph().nodes)
+    assert set(names) <= compiled_nodes
 
 
 def test_field_draft_confidence_is_bounded() -> None:

@@ -81,6 +81,20 @@ tasks:
     cmds:
       - uv run worker
 
+  worker:seed-batch:
+    desc: 'Dev: load the sample CSV into a batch + rows and enqueue a cluster job'
+    dir: apps/worker
+    cmds:
+      - uv run python scripts/seed_batch.py {{.CLI_ARGS}}
+
+  worker:drain:
+    desc: 'Dev: run the worker once, processing the queue until empty, then exit'
+    dir: apps/worker
+    env:
+      WORKER_DRAIN: 'true'
+    cmds:
+      - uv run worker
+
   db:start:
     desc: Boot the local Supabase stack (needs Docker)
     cmds:
