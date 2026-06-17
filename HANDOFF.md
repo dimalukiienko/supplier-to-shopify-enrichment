@@ -2,11 +2,12 @@
 
 Status snapshot for the next engineer/agent picking up this repo.
 
-- **Branch:** `feat/worker-core` (built on the merged `feat/monorepo-foundation`)
+- **Branch:** `feat/bff-and-reviewer-ui` (built on the merged worker core)
 - **Stage:** Stage 1 vertical slice (`enrich → human review → publish`)
-- **Current state:** monorepo foundation + the **enrichment worker core are
-  implemented and verified end-to-end**; the BFF API and reviewer UI are still
-  scaffold-only.
+- **Current state:** the full slice now runs end-to-end — monorepo foundation,
+  the **enrichment worker core**, **and the BFF API + reviewer UI** are
+  implemented and verified. A reviewer can upload a CSV, watch products enrich
+  live, accept/override fields, and approve → push (Shopify mocked).
 
 Read first: `docs/ARCHITECTURE.md` (flow + built-vs-deferred), `docs/DATABASE.md`
 (schema source of truth), `docs/MONOREPO.md` (conventions). This file only
@@ -63,25 +64,52 @@ The full job → cluster → enrich → persist path runs end-to-end:
   contract, clustering, and a stubbed-LLM graph run) all green, plus a live
   OpenAI end-to-end run on the sample CSV.
 
-### Apps — still scaffold-only
-- **`apps/web`** (Next.js App Router): layout, placeholder home page, Supabase
-  browser/server clients, and a working `GET /api/health` route. Reviewer UI and
-  most BFF route handlers are **not built**.
+### Web tier — BFF API + reviewer UI (`apps/web`) — **implemented**
+The full reviewer slice runs against the worker output:
+- **BFF route handlers** (`apps/web/src/app/api/`): `batches` GET/POST (upload a
+  CSV → insert batch + supplier_rows → enqueue `cluster_batch`; replaces the
+  dev-only `seed_batch.py`), `batches/[id]/products` GET, `products/[id]` GET
+  (product + variants + fields + latest run), `products/[id]/fields/[fieldId]`
+  PATCH (accept/override), `approve`, `push` (**mocked** Shopify), `retry`
+  (re-enqueue enrich), and `settings` GET/PUT. All go through `service_role`;
+  request bodies validated with `zod` (`src/lib/schemas.ts`, `src/lib/api.ts`).
+- **Reviewer UI** (`apps/web/src/app`): batches dashboard + upload form; batch
+  view with **live** status via Supabase Realtime (`BatchLive`); product review
+  page with per-field accept/override (`FieldEditable` in `SectionCard`-based
+  layout, fields described in `src/lib/productFields.ts`), variant table, and
+  live field streaming (`ReviewLive`); approve → push controls; settings editor.
+  Server Components read **only** through the BFF (`src/lib/bff.ts`); the browser
+  touches Supabase directly only for Realtime (anon key).
+- **UI shell & styling:** Tailwind v4 + PostCSS (`postcss.config.mjs`); an
+  `AppShell` nav with a dark/light `ThemeToggle` (no-flash theme script in
+  `layout.tsx`); route-level loading skeletons (`loading.tsx` + `PageSkeletons`)
+  driven by a `navigation-loading-store` + `TrackedLink`; `lucide-react` icons.
+- **DB access fix:** added `..._grants.sql` — RLS alone is not enough; PostgREST
+  needs table `GRANT`s for `service_role` (BFF) and `anon` (Realtime). The worker
+  (direct `postgres` connection) never needed them, so this surfaced here.
+- **Verified:** `pnpm turbo run lint type-check build` green, no type drift;
+  end-to-end against local Supabase + a live worker drain (113-row sample CSV →
+  93 products enriched; accept/override/approve/push and settings all exercised;
+  reviewer edits survive re-enrichment).
 
 ---
 
 ## What remains to be done (Stage 1)
 
-The worker core is done (above); these are the remaining slice pieces.
+The worker core and the BFF + reviewer UI are done (above); these are the
+remaining pieces.
 
-### BFF — Next.js route handlers (`apps/web/src/app/api/`)
-Only `health` exists. Still needed (see `docs/ARCHITECTURE.md` §3):
-- `batches` / `products` / `fields` — CRUD + listing; **upload** inserts a batch +
-  supplier_rows and enqueues a `cluster_batch` job. This replaces the dev-only
-  `apps/worker/scripts/seed_batch.py` harness (used today for verification).
-- `approve / push` — records approval, initiates Shopify push (**mocked** in
-  Stage 1, path wired but does not hit live Shopify).
-- `settings` — read/write enrichment + prompt config.
+### Web tier follow-ups (post-slice, optional)
+- **Duplicate field rows after re-enrichment.** `persist.py` deletes only
+  `status='ai'` rows and re-inserts the fresh AI draft, so a field that was
+  accepted/overridden then re-enriched shows **two** rows (the locked reviewer
+  value + a new `ai` suggestion). The review page renders both. Decide the UX —
+  skip re-drafting reviewer-locked fields in the worker, or collapse/dedupe per
+  `field_name` in the BFF/UI.
+- **XLSX upload.** The upload route accepts `.csv` only; `.xlsx` 415s. The sample
+  has a CSV twin, so this was deferred to stay in the timebox.
+- **Variant-grouping fixes.** The review page shows variants read-only; editing
+  the grouping is not built.
 
 ### Worker follow-ups (post-core, optional)
 - **Real web research:** `research.py::research_facts` is a no-op; wiring a search
@@ -92,13 +120,6 @@ Only `health` exists. Still needed (see `docs/ARCHITECTURE.md` §3):
   research would fix it. Reviewer-correctable meanwhile.
 - **Concurrency/retries:** the claim is `SKIP LOCKED`-safe for multiple workers,
   but there is no retry/backoff policy on `failed` jobs yet.
-
-### Reviewer UI (`apps/web/src/app`)
-- Batch upload & management (status via Realtime; retry failed products).
-- Product review page: per-field accept/override, variant-grouping fixes,
-  approve/push.
-- Settings view.
-- Live updates wired to Supabase Realtime on `enriched_fields` / `products.status`.
 
 ### Evals
 - `evals/` has Promptfoo config scaffold; datasets/assertions not built out.

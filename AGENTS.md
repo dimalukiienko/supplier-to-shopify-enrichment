@@ -21,8 +21,8 @@ Authoritative project docs:
 
 - The repository contains the monorepo **foundation**: workspace tooling, app/package scaffolds, Supabase migrations, and CI — but business logic (graph nodes, BFF handlers, review UI) is still stubbed.
 - Structure and conventions are documented in `docs/MONOREPO.md`:
-  - `apps/web` — Next.js (App Router) frontend + BFF route handlers.
-  - `apps/worker` — Python + LangGraph enrichment worker (uv-managed); graph/pipeline/poller bodies are stubs.
+  - `apps/web` — Next.js (App Router) frontend + BFF route handlers. See [`apps/web/README.md`](apps/web/README.md).
+  - `apps/worker` — Python + LangGraph enrichment worker (uv-managed); graph/pipeline/poller bodies are stubs. See [`apps/worker/README.md`](apps/worker/README.md).
   - `packages/db` — `@repo/db`: generated Supabase TS types + domain aliases.
   - `packages/config-ts`, `packages/config-eslint` — shared TS/ESLint config.
   - `supabase/` — migrations (the schema source of truth) + `seed.sql`.
