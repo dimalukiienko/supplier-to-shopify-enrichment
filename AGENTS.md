@@ -21,8 +21,8 @@ Authoritative project docs:
 
 - The repository contains the monorepo **foundation**: workspace tooling, app/package scaffolds, Supabase migrations, and CI — but business logic (graph nodes, BFF handlers, review UI) is still stubbed.
 - Structure and conventions are documented in `docs/MONOREPO.md`:
-  - `apps/web` — Next.js (App Router) frontend + BFF route handlers. See [`apps/web/README.md`](apps/web/README.md).
-  - `apps/worker` — Python + LangGraph enrichment worker (uv-managed); graph/pipeline/poller bodies are stubs. See [`apps/worker/README.md`](apps/worker/README.md).
+  - `apps/web` — Next.js (App Router) frontend + BFF route handlers. Agent guidance: [`apps/web/AGENTS.md`](apps/web/AGENTS.md); details: [`apps/web/README.md`](apps/web/README.md).
+  - `apps/worker` — Python + LangGraph enrichment worker (uv-managed); graph/pipeline/poller bodies are stubs. Agent guidance: [`apps/worker/AGENTS.md`](apps/worker/AGENTS.md); details: [`apps/worker/README.md`](apps/worker/README.md).
   - `packages/db` — `@repo/db`: generated Supabase TS types + domain aliases.
   - `packages/config-ts`, `packages/config-eslint` — shared TS/ESLint config.
   - `supabase/` — migrations (the schema source of truth) + `seed.sql`.
@@ -40,6 +40,6 @@ Authoritative project docs:
 - For documentation-only changes, review Markdown rendering and links.
 - JS/TS (root): `pnpm install`, then `pnpm turbo run lint type-check build`.
 - Supabase TS types: `pnpm --filter @repo/db gen:types` (CI fails on drift vs the committed `types.gen.ts`).
-- Worker (from `apps/worker`): `uv sync`, then `uv run ruff check .`, `uv run mypy`, `uv run pytest` (pytest includes the model↔schema contract test).
 - Migrations: `supabase start && supabase db reset` applies all migrations + `seed.sql` against a clean local DB.
 - CI (`.github/workflows/ci.yml`) runs the JS, schema/type-drift, and worker checks on every PR.
+- App-specific validation (e.g. the worker's `uv` checks) lives in each app's `AGENTS.md`.
