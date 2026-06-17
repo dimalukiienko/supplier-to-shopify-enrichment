@@ -415,6 +415,22 @@ select:focus {
   border-color: var(--accent);
 }
 
+/* --- Batch toolbar (search + status filter) ------------------------------- */
+.batch-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.batch-toolbar input[type="text"] {
+  flex: 1 1 220px;
+}
+.batch-toolbar select {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 160px;
+}
+
 /* --- Tables --------------------------------------------------------------- */
 table {
   width: 100%;
