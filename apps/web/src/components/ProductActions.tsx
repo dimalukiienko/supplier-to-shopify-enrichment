@@ -2,11 +2,14 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { ExternalLink, RefreshCw, Trash2 } from "lucide-react";
 import type { ProductStatus } from "@repo/db";
 
 /**
  * Approve / push controls for a product. Approve records reviewer sign-off;
- * Push triggers the (mocked) Shopify publish (docs/ARCHITECTURE.md §6).
+ * Push triggers the (mocked) Shopify publish (docs/ARCHITECTURE.md §6). The
+ * Shopify view/sync/delete buttons mirror the reference but are decorative —
+ * live Shopify is mocked in Stage 1.
  */
 export function ProductActions({
   productId,
@@ -37,7 +40,21 @@ export function ProductActions({
   const canPush = status === "approved";
 
   return (
-    <div className="panel" style={{ display: "flex", gap: 8, alignItems: "center" }}>
+    <>
+      <button
+        className="secondary"
+        disabled
+        title="Decorative — Shopify is mocked in Stage 1"
+      >
+        <ExternalLink size={14} /> View on Shopify
+      </button>
+      <button
+        className="secondary"
+        disabled
+        title="Decorative — Shopify is mocked in Stage 1"
+      >
+        <Trash2 size={14} /> Delete from Shopify
+      </button>
       <button onClick={() => act("approve")} disabled={busy || !canApprove}>
         Approve
       </button>
@@ -46,12 +63,10 @@ export function ProductActions({
         onClick={() => act("push")}
         disabled={busy || !canPush}
       >
-        Push to Shopify
+        <RefreshCw size={14} /> Sync to Shopify
       </button>
       {note && <span className="muted">{note}</span>}
-      {status === "published" && (
-        <span className="muted">Published (mocked).</span>
-      )}
-    </div>
+      {status === "published" && <span className="muted">Published (mocked).</span>}
+    </>
   );
 }

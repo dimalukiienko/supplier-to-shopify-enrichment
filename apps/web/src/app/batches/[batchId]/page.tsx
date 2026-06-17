@@ -1,8 +1,8 @@
-import Link from "next/link";
 import type { ProductStatus } from "@repo/db";
 import { bffFetch } from "@/lib/bff";
 import { BatchLive } from "@/components/BatchLive";
 import { RetryButton } from "@/components/RetryButton";
+import { TrackedLink } from "@/components/TrackedLink";
 
 type ProductListItem = {
   id: string;
@@ -27,7 +27,7 @@ export default async function BatchPage({
   return (
     <main>
       <p>
-        <Link href="/">← Batches</Link>
+        <TrackedLink href="/">← Batches</TrackedLink>
       </p>
       <h1>Batch products</h1>
       <p className="muted">Status updates stream in live as the worker runs.</p>
@@ -43,9 +43,9 @@ export default async function BatchPage({
           products.map((p) => (
             <div className="row" key={p.id}>
               <div>
-                <Link href={`/products/${p.id}`}>
+                <TrackedLink href={`/products/${p.id}`}>
                   {p.title ?? <span className="muted">Untitled product</span>}
-                </Link>
+                </TrackedLink>
                 <div className="muted">{p.variant_count} variant(s)</div>
               </div>
               <div className="actions">

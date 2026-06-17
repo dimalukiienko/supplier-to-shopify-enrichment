@@ -1,6 +1,6 @@
-import Link from "next/link";
 import type { BatchStatus } from "@repo/db";
 import { bffFetch } from "@/lib/bff";
+import { TrackedLink } from "@/components/TrackedLink";
 import { UploadForm } from "@/components/UploadForm";
 
 type BatchListItem = {
@@ -34,7 +34,7 @@ export default async function HomePage() {
           batches.map((b) => (
             <div className="row" key={b.id}>
               <div>
-                <Link href={`/batches/${b.id}`}>{b.name}</Link>
+                <TrackedLink href={`/batches/${b.id}`}>{b.name}</TrackedLink>
                 <div className="muted">
                   {new Date(b.created_at).toLocaleString()}
                 </div>

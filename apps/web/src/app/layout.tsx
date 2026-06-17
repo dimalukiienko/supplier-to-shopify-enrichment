@@ -1,24 +1,30 @@
 import type { ReactNode } from "react";
-import Link from "next/link";
 import "./globals.css";
+import { AppShell } from "@/components/AppShell";
 
 export const metadata = {
-  title: "Supplier → Shopify Enrichment",
+  title: "Supplier to Shopify Enrichment",
   description: "Reviewer workspace for AI-enriched supplier products",
 };
 
+// Applies the saved theme before paint so the dark toggle doesn't flash.
+const themeScript = `
+(function () {
+  try {
+    var t = localStorage.getItem('theme');
+    if (t === 'dark') document.documentElement.classList.add('dark');
+  } catch (e) {}
+})();
+`;
+
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
       <body>
-        <nav className="nav">
-          <Link href="/" className="brand">
-            Supplier → Shopify
-          </Link>
-          <Link href="/">Batches</Link>
-          <Link href="/settings">Settings</Link>
-        </nav>
-        <div className="container">{children}</div>
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );

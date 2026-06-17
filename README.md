@@ -46,7 +46,7 @@ the same version.
 task setup
 
 # …or against a hosted Supabase project instead:
-task setup:cloud -- <project-ref>
+task setup:cloud
 
 # Then add OPENAI_API_KEY (or ANTHROPIC_API_KEY) to .env and run both apps:
 task dev          # web → http://localhost:3000  +  enrichment worker
