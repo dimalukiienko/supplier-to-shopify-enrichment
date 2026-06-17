@@ -5,6 +5,12 @@ product listings that a human reviewer inspects, corrects, and approves before
 publishing. This repo is the **Stage 1 vertical slice**: the core
 `enrich → human review → publish` loop.
 
+## Architecture
+
+[![System architecture](docs/assets/architecture.png)](docs/ARCHITECTURE.md)
+
+[![Database schema](docs/assets/database.png)](docs/DATABASE.md)
+
 - **Architecture:** [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 - **Database schema:** [`docs/DATABASE.md`](docs/DATABASE.md)
 - **Monorepo conventions:** [`docs/MONOREPO.md`](docs/MONOREPO.md)
