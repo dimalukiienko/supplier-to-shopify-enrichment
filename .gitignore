@@ -33,3 +33,5 @@ supabase/.temp/
 # Editor / OS
 .DS_Store
 *.log
+
+docs/ai-work-history/*
