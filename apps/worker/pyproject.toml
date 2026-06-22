@@ -11,6 +11,7 @@ dependencies = [
     "pydantic-settings>=2.5.0",
     "psycopg[binary]>=3.2.0",
     "supabase>=2.8.0",
+    "tavily-python>=0.5.0",
 ]
 
 [project.scripts]
@@ -42,6 +43,11 @@ python_version = "3.12"
 strict = true
 packages = ["worker"]
 mypy_path = "src"
+
+# Tavily ships no type stubs / py.typed marker.
+[[tool.mypy.overrides]]
+module = "tavily.*"
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

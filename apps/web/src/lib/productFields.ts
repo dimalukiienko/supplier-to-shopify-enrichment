@@ -19,9 +19,11 @@ export const FIELD_ORDER = [
   "tags",
   "seo_title",
   "seo_description",
+  "barcode",
   "weight",
   "dimensions",
   "pack_qty",
+  "media",
 ];
 
 export function fieldRank(name: string): number {

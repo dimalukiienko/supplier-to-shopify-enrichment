@@ -1,21 +1,125 @@
 """Web/product research seam (research node).
 
 ARCHITECTURE §6 calls for a web/search tool that looks up brand, specs, and
-barcode for thin rows; grounded facts are tagged `source="web"`. Live web search
-is **deferred** in Stage 1, so the default implementation is a no-op that returns
-no grounded facts — the node still runs and downstream drafts fall back to
-`source="llm"`. Tests and a future real tool replace `research_facts`.
+barcode for thin rows; grounded facts are tagged `source="web"` and override the
+LLM draft. Stage 1 grounds **vendor**, **barcode**, and the physical-attribute
+specs **weight / dimensions / pack_qty** via a two-step flow:
 
-A fact is a dict: ``{"field_name": str, "value": str, "source": "web"}``.
+1. Web search (`web_search.search`) for the product, then
+2. a focused LLM extraction (`llm.complete_json`) that pulls those facts out
+   of the search snippets, **only** from the supplied results (no guessing — the
+   specs stay `null` for thin/obscure SKUs rather than being estimated).
+
+It also grounds product **media** with a separate image search
+(`web_search.search_images`), surfacing the top candidate image URLs as one
+`media` fact (newline-joined value) for the reviewer to confirm — product-level
+candidates, not exact-variant image matching.
+
+When no `WEB_SEARCH_API_KEY` is set, `web_search.search`/`search_images` return
+nothing, so this falls back to a no-op (the Stage-1 deferral default) and
+downstream drafts stay `source="llm"`.
+
+A fact is a dict: ``{"field_name": str, "value": str, "confidence": float,
+"source": "web", "url": str}``.
 """
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
+from worker import llm, web_search
 from worker.models.domain import Product, SupplierRow
 
+# Fields we attempt to ground from the web (ARCHITECTURE §6). Physical specs are
+# web-grounded only — never LLM-estimated — so they stay empty when unsupported.
+GROUNDED_FIELDS = ["vendor", "barcode", "weight", "dimensions", "pack_qty"]
 
-def research_facts(product: Product, supplier_rows: list[SupplierRow]) -> list[dict[str, Any]]:
-    """Return grounded research facts for a product. Stage 1: none (deferred)."""
-    return []
+# Number of candidate product images to surface for reviewer confirmation.
+MEDIA_RESULTS = 3
+
+_EXTRACT_SYSTEM = (
+    "You extract verified product facts from web search results for a Shopify "
+    "catalogue. Using ONLY the supplied search results, return a single JSON "
+    "object with keys 'vendor', 'barcode', 'weight', 'dimensions', and "
+    "'pack_qty'. Each key maps to an object with "
+    '"value" (string), "confidence" (number 0-1), and "url" (the source result '
+    "URL the value came from), or null when the results do not clearly support "
+    "it. 'vendor' is the brand/manufacturer; 'barcode' is the UPC/EAN/GTIN; "
+    "'weight' is the product weight including its unit (e.g. '12 g', '0.5 kg'); "
+    "'dimensions' are 'L × W × H' including a unit (e.g. '11 cm × 4 cm × 2 cm'); "
+    "'pack_qty' is the number of units per pack as an integer string. "
+    "Never guess or invent values — prefer null over a low-confidence answer."
+)
+
+
+def _build_query(supplier_rows: list[SupplierRow]) -> str:
+    """Compose a search query from the most descriptive supplier row."""
+    for row in supplier_rows:
+        name = (row.product_name or "").strip()
+        sku = (row.supplier_sku or "").strip()
+        terms = " ".join(t for t in (name, sku) if t)
+        if terms:
+            return f"{terms} brand barcode specs dimensions weight"
+    return ""
+
+
+def research_facts(
+    product: Product,
+    supplier_rows: list[SupplierRow],
+    *,
+    model: str = "gpt-4o-mini",
+) -> list[dict[str, Any]]:
+    """Return grounded research facts (vendor/barcode/specs/media) for a product.
+
+    No-op (returns ``[]``) when web search is disabled or yields nothing.
+    """
+    query = _build_query(supplier_rows)
+    results = web_search.search(query)
+    if not results:
+        return []
+
+    user = json.dumps(
+        {"query": query, "results": [r.model_dump() for r in results]},
+        default=str,
+    )
+    response = llm.complete_json(model=model, system=_EXTRACT_SYSTEM, user=user)
+    content = response.content
+
+    facts: list[dict[str, Any]] = []
+    for field_name in GROUNDED_FIELDS:
+        raw = content.get(field_name)
+        if not isinstance(raw, dict):
+            continue
+        value = raw.get("value")
+        if value in (None, ""):
+            continue
+        try:
+            confidence = max(0.0, min(1.0, float(raw.get("confidence", 0.9))))
+        except (TypeError, ValueError):
+            confidence = 0.9
+        facts.append(
+            {
+                "field_name": field_name,
+                "value": str(value).strip(),
+                "confidence": confidence,
+                "source": "web",
+                "url": str(raw.get("url", "")),
+            }
+        )
+
+    # Product media: a separate image search surfaces candidate gallery URLs the
+    # reviewer confirms. One `media` fact holds the top-N URLs (newline-joined).
+    image_urls = web_search.search_images(query, max_results=MEDIA_RESULTS)
+    if image_urls:
+        facts.append(
+            {
+                "field_name": "media",
+                "value": "\n".join(image_urls),
+                "confidence": 0.6,
+                "source": "web",
+                "url": "",
+            }
+        )
+
+    return facts

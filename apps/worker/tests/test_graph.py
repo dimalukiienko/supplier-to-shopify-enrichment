@@ -8,7 +8,7 @@ from uuid import uuid4
 
 import pytest
 
-from worker import llm
+from worker import llm, web_search
 from worker.graph import run_graph
 from worker.llm import LLMResponse
 from worker.models.domain import Product, SupplierRow, Variant
@@ -62,6 +62,10 @@ def _stub_llm(monkeypatch: pytest.MonkeyPatch) -> None:
                            latency_ms=3)
 
     monkeypatch.setattr(llm, "complete_json", fake)
+    # Keep the LLM-draft path offline even when a developer has a live
+    # WEB_SEARCH_API_KEY in their .env; grounding is covered by its own test.
+    monkeypatch.setattr(web_search, "search", lambda *a, **k: [])
+    monkeypatch.setattr(web_search, "search_images", lambda *a, **k: [])
 
 
 def test_graph_produces_expected_fields() -> None:
@@ -83,3 +87,33 @@ def test_graph_records_node_traces() -> None:
     result = run_graph(_state())
     assert {"parse", "research", "draft", "validate", "assemble"} <= set(result.node_traces)
     assert result.node_traces["draft"]["input_tokens"] == 12
+
+
+def test_graph_grounds_vendor_and_barcode(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Grounded web facts override vendor and add a barcode draft (source='web')."""
+    from worker.graph import nodes
+
+    def fake_research(product, supplier_rows, *, model="gpt-4o-mini"):  # type: ignore[no-untyped-def]
+        return [
+            {"field_name": "vendor", "value": "Rapala", "confidence": 0.95,
+             "source": "web", "url": "https://rapala.com"},
+            {"field_name": "barcode", "value": "0022677012345", "confidence": 0.9,
+             "source": "web", "url": "https://barcodelookup.com/0022677012345"},
+        ]
+
+    monkeypatch.setattr(nodes.research_tool, "research_facts", fake_research)
+
+    result = run_graph(_state())
+    fields = {d.field_name: d for d in result.drafts}
+
+    assert fields["vendor"].source == "web"
+    assert fields["vendor"].value == "Rapala"
+    assert fields["vendor"].confidence >= 0.9
+    # barcode is not in DRAFT_FIELDS but is appended from grounded facts and
+    # survives validate's require_grounded_barcode guardrail (source='web').
+    assert "barcode" in fields
+    assert fields["barcode"].source == "web"
+    assert fields["barcode"].value == "0022677012345"
+    # Citations are recorded for reviewer provenance.
+    sources = {s["field_name"] for s in result.node_traces["research"]["sources"]}
+    assert {"vendor", "barcode"} <= sources

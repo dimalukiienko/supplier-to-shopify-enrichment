@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Pencil } from "lucide-react";
+import { Check, ImageOff, Pencil } from "lucide-react";
 import type { ReviewField } from "@/lib/productFields";
 
-type RenderMode = "text" | "rich" | "tags";
+type RenderMode = "text" | "rich" | "tags" | "media";
 
 /**
  * One reviewable enriched field rendered inside a section card: shows the
@@ -55,6 +55,44 @@ export function FieldEditable({
   const hasValue = value != null && value.trim() !== "";
 
   function renderValue() {
+    if (render === "media") {
+      const urls = (value ?? "")
+        .split("\n")
+        .map((u) => u.trim())
+        .filter(Boolean);
+      if (urls.length === 0) {
+        return (
+          <div className="media-main">
+            <ImageOff size={28} />
+            <span>No media</span>
+            <span className="empty-note" style={{ textAlign: "center" }}>
+              Web-sourced candidates appear here once enriched.
+            </span>
+          </div>
+        );
+      }
+      const [main, ...thumbs] = urls;
+      // External candidate URLs (arbitrary hosts) render as plain <img>; the
+      // app's ESLint config does not load @next/next, so no-img-element is moot
+      // and next/image would need per-host remotePatterns it can't know upfront.
+      return (
+        <div>
+          <span className="media-main">
+            <img src={main} alt="Product media" />
+          </span>
+          {thumbs.length > 0 && (
+            <div className="media-thumbs">
+              {thumbs.map((url, i) => (
+                <span className="media-thumb" key={`${url}-${i}`}>
+                  <img src={url} alt={`Product media ${i + 2}`} />
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
     if (!hasValue) return <span className="faint">{placeholder}</span>;
 
     if (render === "tags") {
@@ -104,7 +142,7 @@ export function FieldEditable({
         <div className="field-edit">
           <textarea
             value={draft}
-            rows={render === "rich" ? 5 : 2}
+            rows={render === "rich" || render === "media" ? 5 : 2}
             onChange={(e) => setDraft(e.target.value)}
           />
           <div className="actions" style={{ marginTop: 8 }}>

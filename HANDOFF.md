@@ -2,12 +2,15 @@
 
 Status snapshot for the next engineer/agent picking up this repo.
 
-- **Branch:** `feat/bff-and-reviewer-ui` (built on the merged worker core)
+- **Branch:** `feat/web-research` (built on the merged worker core + BFF/UI)
 - **Stage:** Stage 1 vertical slice (`enrich → human review → publish`)
-- **Current state:** the full slice now runs end-to-end — monorepo foundation,
-  the **enrichment worker core**, **and the BFF API + reviewer UI** are
-  implemented and verified. A reviewer can upload a CSV, watch products enrich
-  live, accept/override fields, and approve → push (Shopify mocked).
+- **Current state:** the full slice runs end-to-end — monorepo foundation, the
+  **enrichment worker core**, **the BFF API + reviewer UI**, and
+  **web-research grounding** (Tavily search → LLM extraction grounds
+  `vendor`/`barcode`, the physical specs `weight`/`dimensions`/`pack_qty`, and a
+  product-level candidate **media** gallery) are implemented and verified. A
+  reviewer can upload a CSV, watch products enrich live, accept/override fields
+  (including specs + media), and approve → push (Shopify mocked).
 
 Read first: `docs/ARCHITECTURE.md` (flow + built-vs-deferred), `docs/DATABASE.md`
 (schema source of truth), `docs/MONOREPO.md` (conventions). This file only
@@ -94,10 +97,30 @@ The full reviewer slice runs against the worker output:
 
 ---
 
+### Physical Attributes & Product Media — **implemented**
+Both extend the existing web-research seam and the generic `enriched_fields`
+table (**no schema change**) and stay no-ops offline (`WEB_SEARCH_API_KEY` unset):
+- **Physical Attributes (`weight` / `dimensions` / `pack_qty`) — web-grounded only.**
+  Added to `research.py::GROUNDED_FIELDS` + the extraction prompt (units/formats,
+  `null` when unsupported); they persist via `draft`'s existing "surface grounded
+  facts" loop as `source="web"`. **No LLM estimation** (anti-hallucination stance)
+  — fields stay empty for thin/obscure SKUs and the reviewer fills gaps. The UI
+  already renders this section (`page.tsx` Physical Attributes).
+- **Product Media — auto-grounded product-level gallery.**
+  `web_search.search_images()` (Tavily `include_images`) feeds a `media` fact in
+  `research.py` holding the top-3 candidate image URLs (one `enriched_fields` row,
+  newline-joined value, `source="web"`). UI: a `render="media"` mode on
+  `FieldEditable` (gallery of `<img>` thumbs; edit = URL textarea) replaces the
+  old placeholder in `page.tsx`; `media` added to `FIELD_ORDER` + media-img CSS.
+  Scope: **product-level candidates the reviewer confirms — NOT exact-variant
+  image matching** (still deferred, see Scope boundaries).
+- **Verified:** worker `ruff`/`mypy --strict`/`pytest` (23 tests) + web
+  `lint`/`type-check`/`build` all green.
+
 ## What remains to be done (Stage 1)
 
-The worker core and the BFF + reviewer UI are done (above); these are the
-remaining pieces.
+The worker core, the BFF + reviewer UI, and physical-attributes/media grounding
+are done (above); these are the remaining pieces.
 
 ### Web tier follow-ups (post-slice, optional)
 - **Duplicate field rows after re-enrichment.** `persist.py` deletes only
@@ -112,12 +135,15 @@ remaining pieces.
   the grouping is not built.
 
 ### Worker follow-ups (post-core, optional)
-- **Real web research:** `research.py::research_facts` is a no-op; wiring a search
-  tool would let thin rows ground brand/specs/barcode as `source="web"`. The
-  guardrail + `source` plumbing already supports it.
-- **Vendor for SKU-only brands:** when the brand lives only in the SKU prefix
-  (e.g. `RAP-` = Rapala) the LLM emits the raw prefix; a brand-code map or web
-  research would fix it. Reviewer-correctable meanwhile.
+- **Web research — done (vendor, barcode, specs, media).** `research.py::research_facts`
+  runs a **Tavily** web search + a focused LLM extraction and returns grounded
+  `vendor`/`barcode`/`weight`/`dimensions`/`pack_qty` facts plus a candidate
+  `media` gallery (`source="web"`, citations in `runs.node_traces.research`).
+  It's a no-op unless `WEB_SEARCH_API_KEY` is set (keeps CI offline). Only
+  exact-variant image matching stays deferred (see Scope boundaries).
+- **Vendor for SKU-only brands — addressed by web research.** When the brand lives
+  only in the SKU prefix (e.g. `RAP-` = Rapala) the grounded `vendor` fact now
+  overrides the LLM's raw-prefix guess. Reviewer-correctable as before.
 - **Concurrency/retries:** the claim is `SKIP LOCKED`-safe for multiple workers,
   but there is no retry/backoff policy on `failed` jobs yet.
 
@@ -130,8 +156,10 @@ remaining pieces.
 
 Explicitly **deferred / mocked** in Stage 1 (per `docs/ARCHITECTURE.md`):
 - **Shopify Admin API** — mocked; approve/push does not hit live Shopify.
-- Fields **deferred**: Collections, product media/exact-variant images,
-  variants-by-color (schema-ready via `variants.color` but dataset is size-only).
+- Fields **deferred**: Collections; **exact-variant** image matching (per-variant
+  images) — note product-level candidate media *is* built (see "Physical
+  Attributes & Product Media — implemented"); variants-by-color (schema-ready via
+  `variants.color` but dataset is size-only).
 - SEO meta title/description — **partial** (drafted, lightly validated).
 - Later-stage UIs: prompt-management UI, agent/observability UI.
 - Filter/search across products.
