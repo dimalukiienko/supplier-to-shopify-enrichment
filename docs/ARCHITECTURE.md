@@ -18,7 +18,8 @@ The system is organized into six layers:
 | **BFF API** | Next.js route handlers | Backend-for-frontend; thin API over Supabase, enqueues work |
 | **Data layer** | Supabase (Postgres) | Tables, job queue, run/trace records, settings, Realtime |
 | **Enrichment worker** | Python + LangGraph | Polls the job queue and runs the enrichment graph |
-| **External / mocked** | OpenAI, web research, Shopify Admin API | LLM calls, product research, publishing (Shopify mocked in Stage 1) |
+| **External** | OpenAI, Tavily web research | LLM calls; web research grounds vendor + barcode (`source = web`) |
+| **Mocked (Stage 1)** | Shopify Admin API | Publishing — approve/push wired but does not hit live Shopify |
 | **Evals & observability** | Promptfoo, LangGraph tracing | Prompt/graph evaluation and run tracing |
 
 The control flow is: a **human actor** uploads a batch and reviews products in the Next.js app → the **BFF API** persists data to Supabase and enqueues jobs → the **Python worker** picks up jobs, runs the **LangGraph** enrichment pipeline, and persists results → **Supabase Realtime** streams updates back to the UI → the reviewer **approves and pushes** approved products to Shopify (mocked).
@@ -103,7 +104,7 @@ The enrichment is implemented as a **single LangGraph graph** with discrete node
 ## 6. External / mocked services
 
 - **LLM provider (OpenAI)** — invoked by the LangGraph nodes for parsing, drafting, and validation. (The mandated stack permits OpenAI or Anthropic.)
-- **Web / product research** — a search/web tool called by the `research` node to look up brand, specs, and barcode for thin rows; results ground the `draft` node and are tagged `source = web` in `enriched_fields`.
+- **Web / product research (Tavily)** — a search tool called by the `research` node to look up brand, specs, and barcode for thin rows. Stage 1 grounds **vendor + barcode**: the node runs a web search, then a focused LLM extraction pulls verified facts (value/confidence/url) from the snippets; grounded facts override the `draft` node and are tagged `source = web` in `enriched_fields`, with citation URLs recorded in `runs.node_traces.research`. Disabled (no-op) when `WEB_SEARCH_API_KEY` is unset; specs grounding (weight/dimensions/pack qty) remains shallow/deferred.
 - **Shopify Admin API (2026-01)** — **mocked in Stage 1 (P5)**. The approve/push path is wired but does not hit live Shopify.
 
 ### Field-level build-vs-defer scope (Stage 1)
@@ -114,7 +115,8 @@ Every enrichment field from the brief is **accounted for** by the generic `enric
 |-------|---------|-----------|
 | Title (configurable rules) | **Built** | Core demo of normalization + `settings.title_template` regeneration. |
 | Description | **Built** | Primary LLM-drafted body; exercises structured output + guardrails. |
-| Vendor / brand | **Built** | Must be inferred/normalized from raw name/SKU — central to the "thin input" story. |
+| Vendor / brand | **Built** | Inferred from raw name/SKU and **web-grounded** (Tavily, `source = web`) — central to the "thin input" story. |
+| Barcode (UPC/EAN/GTIN) | **Built (grounded-only)** | Web-grounded via the `research` node; the `require_grounded_barcode` guardrail drops non-`web` barcodes so only cited values persist. |
 | Product type / category | **Built** | Cheap, high-value; drives tags/collections downstream. |
 | Tags | **Built** | LLM-drafted from normalized fields. |
 | Variants (size grouping) | **Built** | Clustering + `variants` table; required to show grouping logic. |

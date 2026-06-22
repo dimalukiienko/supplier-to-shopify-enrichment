@@ -18,6 +18,9 @@ class WorkerConfig(BaseSettings):
 
     database_url: str = ""
     openai_api_key: str = ""
+    # Web research tool (research node). Empty → research is a no-op (Stage 1
+    # deferral default; also keeps CI/tests offline).
+    web_search_api_key: str = ""
     poll_interval_seconds: float = 2.0
     batch_size: int = 1
     # When true, exit once the queue is empty instead of polling forever

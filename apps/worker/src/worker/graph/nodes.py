@@ -45,9 +45,21 @@ def parse(state: GraphState) -> GraphState:
 
 
 def research(state: GraphState) -> GraphState:
-    facts = research_tool.research_facts(state.product, state.supplier_rows)
+    model = state.settings.default_model if state.settings else "gpt-4o-mini"
+    facts = research_tool.research_facts(
+        state.product, state.supplier_rows, model=model
+    )
     state.research_facts = facts
-    state.node_traces["research"] = {"fact_count": len(facts)}
+    # Citations live here (enriched_fields has no url column) and are persisted
+    # to runs.node_traces for reviewer provenance.
+    state.node_traces["research"] = {
+        "fact_count": len(facts),
+        "sources": [
+            {"field_name": f["field_name"], "url": f.get("url", "")}
+            for f in facts
+            if "field_name" in f
+        ],
+    }
     return state
 
 
@@ -129,6 +141,26 @@ def draft(state: GraphState) -> GraphState:
         drafts.append(
             FieldDraft(field_name=key, value=value, confidence=confidence, source=source)
         )
+
+    # Surface grounded facts the LLM draft loop doesn't cover (e.g. barcode) so
+    # web-sourced fields persist and `validate`'s require_grounded_barcode applies.
+    drafted = {d.field_name for d in drafts}
+    for field_name, fact in grounded.items():
+        if field_name in drafted:
+            continue
+        value = fact.get("value")
+        if value in (None, ""):
+            continue
+        try:
+            confidence = max(0.0, min(1.0, float(fact.get("confidence", 0.9))))
+        except (TypeError, ValueError):
+            confidence = 0.9
+        drafts.append(
+            FieldDraft(
+                field_name=field_name, value=str(value), confidence=confidence, source="web"
+            )
+        )
+
     state.drafts = drafts
 
     name_value, name_conf = _component(content, "name")

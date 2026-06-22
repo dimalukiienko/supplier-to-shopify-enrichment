@@ -112,12 +112,15 @@ remaining pieces.
   the grouping is not built.
 
 ### Worker follow-ups (post-core, optional)
-- **Real web research:** `research.py::research_facts` is a no-op; wiring a search
-  tool would let thin rows ground brand/specs/barcode as `source="web"`. The
-  guardrail + `source` plumbing already supports it.
-- **Vendor for SKU-only brands:** when the brand lives only in the SKU prefix
-  (e.g. `RAP-` = Rapala) the LLM emits the raw prefix; a brand-code map or web
-  research would fix it. Reviewer-correctable meanwhile.
+- **Web research — done (partial: vendor + barcode).** `research.py::research_facts`
+  now runs a **Tavily** web search + a focused LLM extraction and returns grounded
+  `vendor`/`barcode` facts (`source="web"`, citations in `runs.node_traces.research`).
+  It's a no-op unless `WEB_SEARCH_API_KEY` is set (keeps CI offline). Grounding
+  **specs** (weight/dimensions/pack qty) is still deferred — the `source` plumbing
+  and `GROUNDED_FIELDS` list make it a small extension.
+- **Vendor for SKU-only brands — addressed by web research.** When the brand lives
+  only in the SKU prefix (e.g. `RAP-` = Rapala) the grounded `vendor` fact now
+  overrides the LLM's raw-prefix guess. Reviewer-correctable as before.
 - **Concurrency/retries:** the claim is `SKIP LOCKED`-safe for multiple workers,
   but there is no retry/backoff policy on `failed` jobs yet.
 
