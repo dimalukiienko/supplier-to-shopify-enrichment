@@ -43,18 +43,26 @@ def test_research_facts_no_op_without_results(monkeypatch: pytest.MonkeyPatch) -
     assert research.research_facts(_product(), _rows()) == []
 
 
-def test_research_facts_extracts_vendor_and_barcode(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_research_facts_extracts_vendor_barcode_and_specs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(
         web_search, "search",
         lambda *a, **k: [WebResult(title="Rapala Original Floater",
                                    url="https://rapala.com/f11",
-                                   content="Rapala F11 UPC 0022677012345")],
+                                   content="Rapala F11 UPC 0022677012345, 6g, 11cm")],
     )
+    # Media disabled here so the test isolates the text-extraction facts.
+    monkeypatch.setattr(web_search, "search_images", lambda *a, **k: [])
 
     canned = {
         "vendor": {"value": "Rapala", "confidence": 0.95, "url": "https://rapala.com/f11"},
         "barcode": {"value": "0022677012345", "confidence": 0.9,
                     "url": "https://rapala.com/f11"},
+        "weight": {"value": "6 g", "confidence": 0.8, "url": "https://rapala.com/f11"},
+        "dimensions": {"value": "11 cm", "confidence": 0.7,
+                       "url": "https://rapala.com/f11"},
+        "pack_qty": {"value": "1", "confidence": 0.6, "url": "https://rapala.com/f11"},
     }
     monkeypatch.setattr(
         llm, "complete_json",
@@ -63,10 +71,32 @@ def test_research_facts_extracts_vendor_and_barcode(monkeypatch: pytest.MonkeyPa
 
     facts = research.research_facts(_product(), _rows())
     by_field = {f["field_name"]: f for f in facts}
-    assert set(by_field) == {"vendor", "barcode"}
+    assert set(by_field) == {"vendor", "barcode", "weight", "dimensions", "pack_qty"}
     assert all(f["source"] == "web" for f in facts)
     assert by_field["vendor"]["value"] == "Rapala"
     assert by_field["barcode"]["url"] == "https://rapala.com/f11"
+    assert by_field["weight"]["value"] == "6 g"
+
+
+def test_research_facts_grounds_media(monkeypatch: pytest.MonkeyPatch) -> None:
+    """search_images URLs surface as one newline-joined `media` fact."""
+    monkeypatch.setattr(
+        web_search, "search",
+        lambda *a, **k: [WebResult(title="t", url="u", content="c")],
+    )
+    monkeypatch.setattr(
+        web_search, "search_images",
+        lambda *a, **k: ["https://img/1.jpg", "https://img/2.jpg"],
+    )
+    monkeypatch.setattr(
+        llm, "complete_json",
+        lambda **k: LLMResponse(content={}, model="gpt-4o-mini"),
+    )
+
+    facts = research.research_facts(_product(), _rows())
+    media = next(f for f in facts if f["field_name"] == "media")
+    assert media["source"] == "web"
+    assert media["value"] == "https://img/1.jpg\nhttps://img/2.jpg"
 
 
 def test_research_facts_skips_null_values(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -75,6 +105,7 @@ def test_research_facts_skips_null_values(monkeypatch: pytest.MonkeyPatch) -> No
         web_search, "search",
         lambda *a, **k: [WebResult(title="t", url="u", content="c")],
     )
+    monkeypatch.setattr(web_search, "search_images", lambda *a, **k: [])
     canned = {
         "vendor": {"value": "Rapala", "confidence": 0.9, "url": "u"},
         "barcode": None,

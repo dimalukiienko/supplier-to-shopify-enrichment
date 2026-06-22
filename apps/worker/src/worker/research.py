@@ -2,15 +2,22 @@
 
 ARCHITECTURE §6 calls for a web/search tool that looks up brand, specs, and
 barcode for thin rows; grounded facts are tagged `source="web"` and override the
-LLM draft. Stage 1 grounds **vendor** and **barcode** via a two-step flow:
+LLM draft. Stage 1 grounds **vendor**, **barcode**, and the physical-attribute
+specs **weight / dimensions / pack_qty** via a two-step flow:
 
 1. Web search (`web_search.search`) for the product, then
-2. a focused LLM extraction (`llm.complete_json`) that pulls vendor/barcode out
-   of the search snippets, **only** from the supplied results (no guessing).
+2. a focused LLM extraction (`llm.complete_json`) that pulls those facts out
+   of the search snippets, **only** from the supplied results (no guessing — the
+   specs stay `null` for thin/obscure SKUs rather than being estimated).
 
-When no `WEB_SEARCH_API_KEY` is set, `web_search.search` returns nothing, so this
-falls back to a no-op (the Stage-1 deferral default) and downstream drafts stay
-`source="llm"`.
+It also grounds product **media** with a separate image search
+(`web_search.search_images`), surfacing the top candidate image URLs as one
+`media` fact (newline-joined value) for the reviewer to confirm — product-level
+candidates, not exact-variant image matching.
+
+When no `WEB_SEARCH_API_KEY` is set, `web_search.search`/`search_images` return
+nothing, so this falls back to a no-op (the Stage-1 deferral default) and
+downstream drafts stay `source="llm"`.
 
 A fact is a dict: ``{"field_name": str, "value": str, "confidence": float,
 "source": "web", "url": str}``.
@@ -24,16 +31,24 @@ from typing import Any
 from worker import llm, web_search
 from worker.models.domain import Product, SupplierRow
 
-# Fields we attempt to ground from the web (ARCHITECTURE §6).
-GROUNDED_FIELDS = ["vendor", "barcode"]
+# Fields we attempt to ground from the web (ARCHITECTURE §6). Physical specs are
+# web-grounded only — never LLM-estimated — so they stay empty when unsupported.
+GROUNDED_FIELDS = ["vendor", "barcode", "weight", "dimensions", "pack_qty"]
+
+# Number of candidate product images to surface for reviewer confirmation.
+MEDIA_RESULTS = 3
 
 _EXTRACT_SYSTEM = (
     "You extract verified product facts from web search results for a Shopify "
     "catalogue. Using ONLY the supplied search results, return a single JSON "
-    "object with keys 'vendor' and 'barcode'. Each key maps to an object with "
+    "object with keys 'vendor', 'barcode', 'weight', 'dimensions', and "
+    "'pack_qty'. Each key maps to an object with "
     '"value" (string), "confidence" (number 0-1), and "url" (the source result '
     "URL the value came from), or null when the results do not clearly support "
-    "it. 'vendor' is the brand/manufacturer; 'barcode' is the UPC/EAN/GTIN. "
+    "it. 'vendor' is the brand/manufacturer; 'barcode' is the UPC/EAN/GTIN; "
+    "'weight' is the product weight including its unit (e.g. '12 g', '0.5 kg'); "
+    "'dimensions' are 'L × W × H' including a unit (e.g. '11 cm × 4 cm × 2 cm'); "
+    "'pack_qty' is the number of units per pack as an integer string. "
     "Never guess or invent values — prefer null over a low-confidence answer."
 )
 
@@ -45,7 +60,7 @@ def _build_query(supplier_rows: list[SupplierRow]) -> str:
         sku = (row.supplier_sku or "").strip()
         terms = " ".join(t for t in (name, sku) if t)
         if terms:
-            return f"{terms} brand barcode"
+            return f"{terms} brand barcode specs dimensions weight"
     return ""
 
 
@@ -55,7 +70,7 @@ def research_facts(
     *,
     model: str = "gpt-4o-mini",
 ) -> list[dict[str, Any]]:
-    """Return grounded research facts (vendor/barcode) for a product.
+    """Return grounded research facts (vendor/barcode/specs/media) for a product.
 
     No-op (returns ``[]``) when web search is disabled or yields nothing.
     """
@@ -92,4 +107,19 @@ def research_facts(
                 "url": str(raw.get("url", "")),
             }
         )
+
+    # Product media: a separate image search surfaces candidate gallery URLs the
+    # reviewer confirms. One `media` fact holds the top-N URLs (newline-joined).
+    image_urls = web_search.search_images(query, max_results=MEDIA_RESULTS)
+    if image_urls:
+        facts.append(
+            {
+                "field_name": "media",
+                "value": "\n".join(image_urls),
+                "confidence": 0.6,
+                "source": "web",
+                "url": "",
+            }
+        )
+
     return facts

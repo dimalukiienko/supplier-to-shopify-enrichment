@@ -18,7 +18,7 @@ The system is organized into six layers:
 | **BFF API** | Next.js route handlers | Backend-for-frontend; thin API over Supabase, enqueues work |
 | **Data layer** | Supabase (Postgres) | Tables, job queue, run/trace records, settings, Realtime |
 | **Enrichment worker** | Python + LangGraph | Polls the job queue and runs the enrichment graph |
-| **External** | OpenAI, Tavily web research | LLM calls; web research grounds vendor + barcode (`source = web`) |
+| **External** | OpenAI, Tavily web research | LLM calls; web research grounds vendor, barcode, physical specs + candidate media (`source = web`) |
 | **Mocked (Stage 1)** | Shopify Admin API | Publishing — approve/push wired but does not hit live Shopify |
 | **Evals & observability** | Promptfoo, LangGraph tracing | Prompt/graph evaluation and run tracing |
 
@@ -104,7 +104,7 @@ The enrichment is implemented as a **single LangGraph graph** with discrete node
 ## 6. External / mocked services
 
 - **LLM provider (OpenAI)** — invoked by the LangGraph nodes for parsing, drafting, and validation. (The mandated stack permits OpenAI or Anthropic.)
-- **Web / product research (Tavily)** — a search tool called by the `research` node to look up brand, specs, and barcode for thin rows. Stage 1 grounds **vendor + barcode**: the node runs a web search, then a focused LLM extraction pulls verified facts (value/confidence/url) from the snippets; grounded facts override the `draft` node and are tagged `source = web` in `enriched_fields`, with citation URLs recorded in `runs.node_traces.research`. Disabled (no-op) when `WEB_SEARCH_API_KEY` is unset; specs grounding (weight/dimensions/pack qty) remains shallow/deferred.
+- **Web / product research (Tavily)** — a search tool called by the `research` node to look up brand, specs, barcode, and product images for thin rows. Stage 1 grounds **vendor, barcode, and physical specs (weight/dimensions/pack qty)**: the node runs a web search, then a focused LLM extraction pulls verified facts (value/confidence/url) from the snippets — **never estimating**, so unsupported specs stay empty. A separate image search surfaces top-N candidate gallery URLs as one `media` fact. Grounded facts override the `draft` node and are tagged `source = web` in `enriched_fields`, with citation URLs recorded in `runs.node_traces.research`. Disabled (no-op) when `WEB_SEARCH_API_KEY` is unset. Exact-variant image matching remains deferred.
 - **Shopify Admin API (2026-01)** — **mocked in Stage 1 (P5)**. The approve/push path is wired but does not hit live Shopify.
 
 ### Field-level build-vs-defer scope (Stage 1)
@@ -121,9 +121,10 @@ Every enrichment field from the brief is **accounted for** by the generic `enric
 | Tags | **Built** | LLM-drafted from normalized fields. |
 | Variants (size grouping) | **Built** | Clustering + `variants` table; required to show grouping logic. |
 | SEO meta title + description | **Partial** | Drafted but lightly validated; lower review risk in Stage 1. |
-| Weight / dimensions / pack qty | **Partial** | Schema + fields present; research is shallow, reviewer fills gaps. |
+| Weight / dimensions / pack qty | **Built (grounded-only)** | Web-grounded via the `research` node (`source = web`); **no LLM estimation** — fields stay empty for thin/obscure SKUs and the reviewer fills gaps. |
+| Product media (product-level candidates) | **Built (grounded-only)** | Image search surfaces top-N candidate gallery URLs as one `media` field (`source = web`) the reviewer confirms. |
 | Collections | **Deferred** | Distinct from tags/type; needs a store taxonomy not modeled in Stage 1. |
-| Product media / images (exact-variant) | **Deferred** | Exact-variant image matching is high-effort and high-risk; out of the timebox. |
+| Product images — exact-variant matching | **Deferred** | Per-variant image matching is high-effort and high-risk; out of the timebox (product-level candidates *are* built, above). |
 | Variants by size + color | **Deferred (designed)** | `variants.color` exists; dataset is size-only, so color grouping is schema-ready but not exercised. |
 
 ---

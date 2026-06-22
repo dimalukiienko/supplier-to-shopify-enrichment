@@ -23,6 +23,7 @@ export const FIELD_ORDER = [
   "weight",
   "dimensions",
   "pack_qty",
+  "media",
 ];
 
 export function fieldRank(name: string): number {

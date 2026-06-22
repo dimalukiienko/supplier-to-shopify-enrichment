@@ -195,20 +195,12 @@ export default async function ProductPage({
 
         <div className="review-col">
           <SectionCard icon={<ImageOff size={15} />} title="Product Media">
-            <div className="media-main">
-              <ImageOff size={28} />
-              <span>No media</span>
-              <span className="empty-note" style={{ textAlign: "center" }}>
-                Exact-variant image matching is deferred in Stage 1.
-              </span>
-            </div>
-            <div className="media-thumbs">
-              {[0, 1].map((i) => (
-                <span className="media-thumb" key={i}>
-                  <ImageOff size={16} />
-                </span>
-              ))}
-            </div>
+            <FieldEditable
+              productId={productId}
+              field={fieldByName(fields, "media")}
+              fieldName="media"
+              render="media"
+            />
           </SectionCard>
         </div>
       </div>

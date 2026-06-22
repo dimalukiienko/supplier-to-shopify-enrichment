@@ -8,7 +8,7 @@ from uuid import uuid4
 
 import pytest
 
-from worker import llm
+from worker import llm, web_search
 from worker.graph import run_graph
 from worker.llm import LLMResponse
 from worker.models.domain import Product, SupplierRow, Variant
@@ -62,6 +62,10 @@ def _stub_llm(monkeypatch: pytest.MonkeyPatch) -> None:
                            latency_ms=3)
 
     monkeypatch.setattr(llm, "complete_json", fake)
+    # Keep the LLM-draft path offline even when a developer has a live
+    # WEB_SEARCH_API_KEY in their .env; grounding is covered by its own test.
+    monkeypatch.setattr(web_search, "search", lambda *a, **k: [])
+    monkeypatch.setattr(web_search, "search_images", lambda *a, **k: [])
 
 
 def test_graph_produces_expected_fields() -> None:

@@ -56,3 +56,27 @@ def search(query: str, *, max_results: int = 5) -> list[WebResult]:
         )
         for r in results
     ]
+
+
+def search_images(query: str, *, max_results: int = 3) -> list[str]:
+    """Return candidate product image URLs for `query`; empty when disabled.
+
+    Uses Tavily's `include_images` so the same search seam grounds product-level
+    media (top-N candidates the reviewer confirms — not exact-variant matching).
+    """
+    client = _get_client()
+    if client is None or not query.strip():
+        return []
+
+    response = client.search(query=query, include_images=True)
+    images = response.get("images", []) if isinstance(response, dict) else []
+    urls: list[str] = []
+    for image in images:
+        # Tavily returns plain URL strings, or dicts when image descriptions are
+        # requested; tolerate both so a provider tweak doesn't break grounding.
+        url = image.get("url") if isinstance(image, dict) else image
+        if url:
+            urls.append(str(url))
+        if len(urls) >= max_results:
+            break
+    return urls
