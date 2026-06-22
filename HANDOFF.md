@@ -2,12 +2,14 @@
 
 Status snapshot for the next engineer/agent picking up this repo.
 
-- **Branch:** `feat/bff-and-reviewer-ui` (built on the merged worker core)
+- **Branch:** `feat/web-research` (built on the merged worker core + BFF/UI)
 - **Stage:** Stage 1 vertical slice (`enrich → human review → publish`)
-- **Current state:** the full slice now runs end-to-end — monorepo foundation,
-  the **enrichment worker core**, **and the BFF API + reviewer UI** are
-  implemented and verified. A reviewer can upload a CSV, watch products enrich
-  live, accept/override fields, and approve → push (Shopify mocked).
+- **Current state:** the full slice runs end-to-end — monorepo foundation, the
+  **enrichment worker core**, **the BFF API + reviewer UI**, and now
+  **web-research grounding** (Tavily search → LLM extraction grounds
+  `vendor`/`barcode`) are implemented and verified. A reviewer can upload a CSV,
+  watch products enrich live, accept/override fields, and approve → push
+  (Shopify mocked).
 
 Read first: `docs/ARCHITECTURE.md` (flow + built-vs-deferred), `docs/DATABASE.md`
 (schema source of truth), `docs/MONOREPO.md` (conventions). This file only
@@ -99,6 +101,29 @@ The full reviewer slice runs against the worker output:
 The worker core and the BFF + reviewer UI are done (above); these are the
 remaining pieces.
 
+### Next up — Physical Attributes & Product Media (decided, not yet built)
+
+Pulled **into** this stage (previously deferred). Both extend the existing
+web-research seam and the generic `enriched_fields` table, so **no schema
+change** is needed. Both stay no-ops offline (`WEB_SEARCH_API_KEY` unset).
+
+- **Physical Attributes (`weight` / `dimensions` / `pack_qty`) — web-grounded only.**
+  Same path as `barcode`: add the three fields to `research.py::GROUNDED_FIELDS`
+  and the extraction prompt (with units/formats, `null` when unsupported); they
+  persist via `draft`'s existing "surface grounded facts" loop as `source="web"`.
+  Decision: **no LLM estimation** — keep the anti-hallucination stance, so the
+  fields stay empty for thin/obscure SKUs and the reviewer fills gaps. The UI
+  already renders this section (`page.tsx` Physical Attributes, `FIELD_ORDER`).
+- **Product Media — auto-grounded product-level gallery.** Add
+  `web_search.search_images()` (Tavily `include_images`) and a `media` fact in
+  `research.py` holding the top-N candidate image URLs (one `enriched_fields` row,
+  newline-joined value, `source="web"`). UI: a `render="media"` mode on
+  `FieldEditable` (gallery of `<img>` thumbs; edit = URL textarea) replacing the
+  hardcoded placeholder in `page.tsx`; add `media` to `FIELD_ORDER` + media CSS.
+  Scope: **product-level candidates the reviewer confirms — NOT exact-variant
+  image matching** (that stays deferred, see Scope boundaries). BFF needs no
+  change (the generic fields GET/PATCH already covers `media`).
+
 ### Web tier follow-ups (post-slice, optional)
 - **Duplicate field rows after re-enrichment.** `persist.py` deletes only
   `status='ai'` rows and re-inserts the fresh AI draft, so a field that was
@@ -116,8 +141,8 @@ remaining pieces.
   now runs a **Tavily** web search + a focused LLM extraction and returns grounded
   `vendor`/`barcode` facts (`source="web"`, citations in `runs.node_traces.research`).
   It's a no-op unless `WEB_SEARCH_API_KEY` is set (keeps CI offline). Grounding
-  **specs** (weight/dimensions/pack qty) is still deferred — the `source` plumbing
-  and `GROUNDED_FIELDS` list make it a small extension.
+  **specs** (weight/dimensions/pack qty) and **product media** is now an in-scope
+  extension of this same seam — see "Next up" above.
 - **Vendor for SKU-only brands — addressed by web research.** When the brand lives
   only in the SKU prefix (e.g. `RAP-` = Rapala) the grounded `vendor` fact now
   overrides the LLM's raw-prefix guess. Reviewer-correctable as before.
@@ -133,7 +158,8 @@ remaining pieces.
 
 Explicitly **deferred / mocked** in Stage 1 (per `docs/ARCHITECTURE.md`):
 - **Shopify Admin API** — mocked; approve/push does not hit live Shopify.
-- Fields **deferred**: Collections, product media/exact-variant images,
+- Fields **deferred**: Collections; **exact-variant** image matching (per-variant
+  images) — note product-level candidate media *is* now in scope (see "Next up");
   variants-by-color (schema-ready via `variants.color` but dataset is size-only).
 - SEO meta title/description — **partial** (drafted, lightly validated).
 - Later-stage UIs: prompt-management UI, agent/observability UI.
