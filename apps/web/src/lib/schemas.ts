@@ -38,3 +38,16 @@ export const settingsUpdateSchema = z.object({
 });
 
 export type SettingsUpdateInput = z.infer<typeof settingsUpdateSchema>;
+
+/**
+ * PUT body for editing the active prompt versions the worker reads
+ * (apps/worker/src/worker/pipeline/fetch.py). Each entry targets a prompt by
+ * name; the handler updates its active version's content (or creates one).
+ */
+export const promptsUpdateSchema = z.object({
+  prompts: z
+    .array(z.object({ name: z.string().min(1), content: z.string().min(1) }))
+    .min(1),
+});
+
+export type PromptsUpdateInput = z.infer<typeof promptsUpdateSchema>;

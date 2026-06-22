@@ -9,7 +9,8 @@ import { settingsUpdateSchema } from "@/lib/schemas";
  * settings row (apps/worker/src/worker/pipeline/fetch.py: earliest row).
  *
  * GET — returns the settings row plus the active prompt_versions.
- * PUT — updates title_template, default_model, guardrail_config.
+ * PUT — upserts the singleton: updates the existing row, or inserts one (with
+ *       column defaults filling id/created_at/updated_at) when none exists yet.
  */
 
 async function loadSettingsId(
@@ -57,16 +58,18 @@ export async function PUT(request: Request) {
   const supabase = createServerClient();
   const existing = await loadSettingsId(supabase);
   if (existing.error) return jsonError(500, existing.error.message);
-  if (!existing.data) return jsonError(404, "Settings row not found");
 
-  const { data, error } = await supabase
-    .from("settings")
-    .update({
-      title_template: parsed.data.title_template,
-      default_model: parsed.data.default_model,
-      guardrail_config: parsed.data.guardrail_config as Json,
-    })
-    .eq("id", existing.data.id)
+  const values = {
+    title_template: parsed.data.title_template,
+    default_model: parsed.data.default_model,
+    guardrail_config: parsed.data.guardrail_config as Json,
+  };
+
+  const query = existing.data
+    ? supabase.from("settings").update(values).eq("id", existing.data.id)
+    : supabase.from("settings").insert(values);
+
+  const { data, error } = await query
     .select("id, title_template, default_model, guardrail_config")
     .single();
 
