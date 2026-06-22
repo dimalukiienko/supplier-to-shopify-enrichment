@@ -14,6 +14,15 @@ root [`../../AGENTS.md`](../../AGENTS.md).
   client components.
 - Keep the zod request schemas in `src/lib/schemas.ts` aligned with the SQL
   schema and the `@repo/db` types.
+- Build UI from the shadcn/ui primitives in `src/components/ui` and style with
+  Tailwind utilities + `cn()` (`src/lib/utils.ts`). Do **not** add bespoke
+  global CSS classes — `globals.css` is only the shadcn token layer. Add new
+  primitives via `pnpm dlx shadcn@latest add <name>` (`components.json`).
+- Dark mode is owned by `next-themes` (`.dark` on `<html>`); use `useTheme()`,
+  never toggle the class manually. Domain status colors live in
+  `src/components/ui/status-badge.tsx` as `cva` variants.
+- Add animation through the `src/components/motion` wrappers so reduced-motion
+  handling stays centralized.
 
 ## Validation
 

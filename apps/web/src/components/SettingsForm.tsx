@@ -3,6 +3,12 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+
 type Settings = {
   title_template: { token: string }[];
   default_model: string;
@@ -67,38 +73,48 @@ export function SettingsForm({ settings }: { settings: Settings }) {
   }
 
   return (
-    <div className="panel">
-      <label className="muted">Title format tokens (comma-separated)</label>
-      <input
-        type="text"
-        value={tokens}
-        onChange={(e) => setTokens(e.target.value)}
-      />
-
-      <label className="muted" style={{ marginTop: 12, display: "block" }}>
-        Default model
-      </label>
-      <input
-        type="text"
-        value={model}
-        onChange={(e) => setModel(e.target.value)}
-      />
-
-      <label className="muted" style={{ marginTop: 12, display: "block" }}>
-        Guardrail config (JSON)
-      </label>
-      <textarea
-        value={guardrails}
-        rows={5}
-        onChange={(e) => setGuardrails(e.target.value)}
-      />
-
-      <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center" }}>
-        <button onClick={save} disabled={busy}>
-          {busy ? "Saving…" : "Save"}
-        </button>
-        {message && <span className="muted">{message}</span>}
+    <Card className="gap-4 p-4">
+      <div className="grid gap-1.5">
+        <Label htmlFor="title-tokens">
+          Title format tokens (comma-separated)
+        </Label>
+        <Input
+          id="title-tokens"
+          type="text"
+          value={tokens}
+          onChange={(e) => setTokens(e.target.value)}
+        />
       </div>
-    </div>
+
+      <div className="grid gap-1.5">
+        <Label htmlFor="default-model">Default model</Label>
+        <Input
+          id="default-model"
+          type="text"
+          value={model}
+          onChange={(e) => setModel(e.target.value)}
+        />
+      </div>
+
+      <div className="grid gap-1.5">
+        <Label htmlFor="guardrails">Guardrail config (JSON)</Label>
+        <Textarea
+          id="guardrails"
+          value={guardrails}
+          rows={5}
+          onChange={(e) => setGuardrails(e.target.value)}
+          className="font-mono"
+        />
+      </div>
+
+      <div className="flex items-center gap-2">
+        <Button onClick={save} disabled={busy}>
+          {busy ? "Saving…" : "Save"}
+        </Button>
+        {message && (
+          <span className="text-muted-foreground text-sm">{message}</span>
+        )}
+      </div>
+    </Card>
   );
 }

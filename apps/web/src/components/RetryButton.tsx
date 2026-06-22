@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { Button } from "@/components/ui/button";
+
 /** Re-enqueues enrichment for a product (POST /api/products/[id]/retry). */
 export function RetryButton({ productId }: { productId: string }) {
   const router = useRouter();
@@ -16,8 +18,8 @@ export function RetryButton({ productId }: { productId: string }) {
   }
 
   return (
-    <button className="secondary" onClick={retry} disabled={busy}>
+    <Button variant="secondary" size="sm" onClick={retry} disabled={busy}>
       {busy ? "Retrying…" : "Retry"}
-    </button>
+    </Button>
   );
 }

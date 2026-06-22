@@ -2,41 +2,35 @@
 
 import { useEffect, useState } from "react";
 import { Moon, Sun } from "lucide-react";
+import { useTheme } from "next-themes";
+
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 /**
- * Dark-mode toggle shown at the bottom of the sidebar (see the reference).
- * Light is the default; the choice is persisted to localStorage and applied by
- * toggling the `dark` class on <html>. The inline script in layout.tsx applies
- * the saved theme before paint to avoid a flash.
+ * Dark-mode toggle shown at the bottom of the sidebar. Theme state is owned by
+ * next-themes (`.dark` on <html>, persisted, no pre-paint flash). The `mounted`
+ * guard avoids a hydration mismatch since the theme is only known client-side.
  */
 export function ThemeToggle({ collapsed = false }: { collapsed?: boolean }) {
-  const [dark, setDark] = useState(false);
+  const { resolvedTheme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
 
-  useEffect(() => {
-    setDark(document.documentElement.classList.contains("dark"));
-  }, []);
+  useEffect(() => setMounted(true), []);
 
-  function toggle() {
-    const next = !dark;
-    setDark(next);
-    document.documentElement.classList.toggle("dark", next);
-    try {
-      localStorage.setItem("theme", next ? "dark" : "light");
-    } catch {
-      // ignore storage failures (private mode, etc.)
-    }
-  }
+  const dark = resolvedTheme === "dark";
 
   return (
-    <button
+    <Button
       type="button"
-      className="nav-item"
-      onClick={toggle}
-      aria-pressed={dark}
+      variant="ghost"
+      onClick={() => setTheme(dark ? "light" : "dark")}
+      aria-pressed={mounted ? dark : undefined}
       title={dark ? "Switch to light mode" : "Switch to dark mode"}
+      className={cn("text-muted-foreground w-full justify-start", collapsed && "justify-center")}
     >
-      {dark ? <Sun size={18} /> : <Moon size={18} />}
-      {!collapsed && <span>{dark ? "Light Mode" : "Dark Mode"}</span>}
-    </button>
+      {mounted && dark ? <Sun className="size-[18px]" /> : <Moon className="size-[18px]" />}
+      {!collapsed && <span>{mounted && dark ? "Light Mode" : "Dark Mode"}</span>}
+    </Button>
   );
 }
