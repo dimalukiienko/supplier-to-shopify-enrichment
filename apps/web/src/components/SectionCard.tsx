@@ -1,9 +1,17 @@
 import type { ReactNode } from "react";
 
+import { cn } from "@/lib/utils";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+
 /**
- * Presentational card matching the reference's labelled sections: an icon +
- * uppercase title header (with optional count/right-slot) over a body. Server-
- * safe (no hooks) so it can wrap both static placeholders and client controls.
+ * Presentational section card: an icon + uppercase title header (with optional
+ * count / right-slot action) over a body. Server-safe (no hooks) so it can wrap
+ * both static placeholders and client controls.
  */
 export function SectionCard({
   icon,
@@ -11,7 +19,7 @@ export function SectionCard({
   count,
   action,
   children,
-  bodyClassName = "",
+  bodyClassName,
 }: {
   icon: ReactNode;
   title: string;
@@ -21,14 +29,22 @@ export function SectionCard({
   bodyClassName?: string;
 }) {
   return (
-    <section className="card">
-      <header className="card-header">
-        <span className="card-header-icon">{icon}</span>
-        <span>{title}</span>
-        {count != null && <span className="card-header-count">({count})</span>}
-        {action && <span style={{ marginLeft: "auto" }}>{action}</span>}
-      </header>
-      <div className={`card-body ${bodyClassName}`}>{children}</div>
-    </section>
+    <Card className="gap-0 py-0">
+      <CardHeader className="flex flex-row items-center gap-2 border-b px-4 py-3 [.border-b]:pb-3">
+        <span className="text-muted-foreground inline-flex [&_svg]:size-4">
+          {icon}
+        </span>
+        <CardTitle className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+          {title}
+        </CardTitle>
+        {count != null && (
+          <span className="text-muted-foreground/70 text-xs font-medium">
+            ({count})
+          </span>
+        )}
+        {action && <span className="ml-auto">{action}</span>}
+      </CardHeader>
+      <CardContent className={cn("p-4", bodyClassName)}>{children}</CardContent>
+    </Card>
   );
 }

@@ -3,8 +3,11 @@
 import { useEffect, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { Layers, Settings, type LucideIcon } from "lucide-react";
+
+import { cn } from "@/lib/utils";
 import { ThemeToggle } from "./ThemeToggle";
 import { TrackedLink } from "./TrackedLink";
+import { RouteLoadingBar } from "./motion/RouteLoadingBar";
 import {
   clearNavigationLoading,
   useNavigationLoading,
@@ -17,9 +20,6 @@ type NavItem = {
   match?: (path: string) => boolean;
 };
 
-/**
- * Reviewer app shell — left icon sidebar matching the reference.
- */
 const NAV: NavItem[] = [
   {
     label: "Upload Batches",
@@ -35,6 +35,7 @@ const NAV: NavItem[] = [
   },
 ];
 
+/** Reviewer app shell — sticky left sidebar + scrollable content area. */
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const navigationLoading = useNavigationLoading();
@@ -44,20 +45,20 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, [pathname]);
 
   return (
-    <div
-      className={`app-shell${navigationLoading.pending ? " is-navigating" : ""}`}
-    >
-      <div
-        className="route-loading-bar"
-        aria-hidden={!navigationLoading.pending}
-      />
-      <aside className="sidebar">
-        <div className="sidebar-brand">
-          <span className="brand-mark">S</span>
-          <span className="brand-name">Supplier Enrichment</span>
+    <div className="flex min-h-screen">
+      <RouteLoadingBar />
+
+      <aside className="bg-card sticky top-0 flex h-screen w-58 shrink-0 flex-col border-r">
+        <div className="flex items-center gap-2.5 border-b px-4.5 py-4">
+          <span className="bg-primary text-primary-foreground inline-flex size-7 items-center justify-center rounded-lg text-sm font-bold">
+            S
+          </span>
+          <span className="text-foreground font-semibold">
+            Supplier Enrichment
+          </span>
         </div>
 
-        <nav className="sidebar-nav">
+        <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto p-2">
           {NAV.map((item) => {
             const Icon = item.icon;
             const active = item.match
@@ -68,22 +69,30 @@ export function AppShell({ children }: { children: ReactNode }) {
               <TrackedLink
                 key={item.label}
                 href={item.href}
-                className={`nav-item${active ? " active" : ""}`}
+                className={cn(
+                  "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium transition-colors",
+                  active
+                    ? "bg-accent text-accent-foreground"
+                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                )}
               >
-                <Icon size={18} />
+                <Icon className="size-[18px]" />
                 <span>{item.label}</span>
               </TrackedLink>
             );
           })}
         </nav>
 
-        <div className="sidebar-footer">
+        <div className="border-t p-2">
           <ThemeToggle />
         </div>
       </aside>
 
-      <main className="app-main">
-        <div className="app-content" aria-busy={navigationLoading.pending}>
+      <main className="min-w-0 flex-1">
+        <div
+          className="mx-auto max-w-300 px-7 pt-6 pb-16"
+          aria-busy={navigationLoading.pending}
+        >
           {children}
         </div>
       </main>

@@ -1,6 +1,5 @@
 import {
   Boxes,
-  ChevronRight,
   FileText,
   ImageOff,
   MoreHorizontal,
@@ -20,6 +19,27 @@ import { FieldEditable } from "@/components/FieldEditable";
 import { ProductActions } from "@/components/ProductActions";
 import { ReviewLive } from "@/components/ReviewLive";
 import { TrackedLink } from "@/components/TrackedLink";
+import { FadeIn } from "@/components/motion/FadeIn";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import { StatusBadge } from "@/components/ui/status-badge";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 type ReviewVariant = {
   id: string;
@@ -77,64 +97,83 @@ export default async function ProductPage({
     product.status === "published" || product.status === "approved";
 
   return (
-    <div>
+    <FadeIn>
       <ReviewLive productId={productId} />
 
       {/* Breadcrumb */}
-      <nav className="breadcrumb">
-        <TrackedLink href="/">Inventory</TrackedLink>
-        <ChevronRight size={14} />
-        <TrackedLink href={`/batches/${product.batch_id}`}>
-          Uploaded Products
-        </TrackedLink>
-        <ChevronRight size={14} />
-        <span className="crumb-current">{title}</span>
-      </nav>
+      <Breadcrumb className="mb-4">
+        <BreadcrumbList>
+          <BreadcrumbItem>
+            <BreadcrumbLink asChild>
+              <TrackedLink href="/">Inventory</TrackedLink>
+            </BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem>
+            <BreadcrumbLink asChild>
+              <TrackedLink href={`/batches/${product.batch_id}`}>
+                Uploaded Products
+              </TrackedLink>
+            </BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem>
+            <BreadcrumbPage>{title}</BreadcrumbPage>
+          </BreadcrumbItem>
+        </BreadcrumbList>
+      </Breadcrumb>
 
       {/* Page header */}
-      <div className="page-header">
-        <h1>{title}</h1>
-        <span className={`badge ${product.status}`}>
-          {isPublished && <span className="status-dot active" />}
+      <div className="mb-2 flex items-center gap-3">
+        <h1 className="text-foreground text-xl font-semibold">{title}</h1>
+        <StatusBadge status={product.status}>
+          {isPublished && (
+            <span className="mr-1 inline-block size-2 rounded-full bg-emerald-500" />
+          )}
           {isPublished ? "Shopify Active" : product.status}
-        </span>
-        <span className="spacer" />
-        <button className="ghost" title="Edit">
-          <Pencil size={16} />
-        </button>
-        <button className="ghost" title="More">
-          <MoreHorizontal size={16} />
-        </button>
+        </StatusBadge>
+        <span className="flex-1" />
+        <Button variant="ghost" size="icon" title="Edit">
+          <Pencil className="size-4" />
+        </Button>
+        <Button variant="ghost" size="icon" title="More">
+          <MoreHorizontal className="size-4" />
+        </Button>
       </div>
 
       {/* Parent product + review actions */}
-      <div className="panel parent-card">
-        <span className="parent-thumb">
-          <Package size={20} />
+      <Card className="mb-4 flex flex-row flex-wrap items-start gap-3.5 p-4">
+        <span className="bg-muted text-muted-foreground flex size-11 items-center justify-center rounded-lg">
+          <Package className="size-5" />
         </span>
-        <div className="parent-meta">
-          <div className="muted" style={{ fontSize: 12, fontWeight: 600 }}>
+        <div className="min-w-50 flex-1">
+          <div className="text-muted-foreground text-xs font-semibold">
             PARENT PRODUCT
           </div>
-          <div className="parent-title">{title}</div>
-          <div className="parent-chips">
-            <span className="chip">SKU: {firstRow?.supplier_sku ?? "—"}</span>
-            <span className="chip">Barcode: {firstRow?.barcode ?? "—"}</span>
-            <span className="chip faint">Line Code: not set</span>
+          <div className="text-foreground text-[15px] font-semibold">
+            {title}
+          </div>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <Badge variant="secondary">
+              SKU: {firstRow?.supplier_sku ?? "—"}
+            </Badge>
+            <Badge variant="secondary">
+              Barcode: {firstRow?.barcode ?? "—"}
+            </Badge>
+            <Badge variant="outline" className="text-muted-foreground/70">
+              Line Code: not set
+            </Badge>
           </div>
         </div>
-        <div
-          className="actions"
-          style={{ flexWrap: "wrap", justifyContent: "flex-end" }}
-        >
+        <div className="flex flex-wrap justify-end gap-2">
           <ProductActions productId={productId} status={product.status} />
         </div>
-      </div>
+      </Card>
 
       {/* Two-column review grid */}
-      <div className="review-grid">
-        <div className="review-col">
-          <SectionCard icon={<FileText size={15} />} title="Description">
+      <div className="grid items-start gap-4 lg:grid-cols-[1.4fr_1fr]">
+        <div className="flex min-w-0 flex-col gap-4">
+          <SectionCard icon={<FileText />} title="Description">
             <FieldEditable
               productId={productId}
               field={fieldByName(fields, "description")}
@@ -143,7 +182,7 @@ export default async function ProductPage({
             />
           </SectionCard>
 
-          <SectionCard icon={<Store size={15} />} title="Vendor">
+          <SectionCard icon={<Store />} title="Vendor">
             <FieldEditable
               productId={productId}
               field={fieldByName(fields, "vendor")}
@@ -151,7 +190,7 @@ export default async function ProductPage({
             />
           </SectionCard>
 
-          <SectionCard icon={<Tag size={15} />} title="Product Type">
+          <SectionCard icon={<Tag />} title="Product Type">
             <FieldEditable
               productId={productId}
               field={fieldByName(fields, "product_type")}
@@ -160,7 +199,7 @@ export default async function ProductPage({
           </SectionCard>
 
           <SectionCard
-            icon={<Tags size={15} />}
+            icon={<Tags />}
             title="Tags"
             count={tagCount(fields, "tags")}
           >
@@ -173,10 +212,7 @@ export default async function ProductPage({
             />
           </SectionCard>
 
-          <SectionCard
-            icon={<Search size={15} />}
-            title="Search Engine Listing"
-          >
+          <SectionCard icon={<Search />} title="Search Engine Listing">
             <FieldEditable
               productId={productId}
               field={fieldByName(fields, "seo_title")}
@@ -193,8 +229,8 @@ export default async function ProductPage({
           </SectionCard>
         </div>
 
-        <div className="review-col">
-          <SectionCard icon={<ImageOff size={15} />} title="Product Media">
+        <div className="flex min-w-0 flex-col gap-4">
+          <SectionCard icon={<ImageOff />} title="Product Media">
             <FieldEditable
               productId={productId}
               field={fieldByName(fields, "media")}
@@ -206,9 +242,9 @@ export default async function ProductPage({
       </div>
 
       {/* Physical attributes */}
-      <div style={{ marginTop: 16 }}>
-        <SectionCard icon={<Ruler size={15} />} title="Physical Attributes">
-          <div className="attr-grid">
+      <div className="mt-4">
+        <SectionCard icon={<Ruler />} title="Physical Attributes">
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(120px,1fr))] gap-x-4 gap-y-2">
             <FieldEditable
               productId={productId}
               field={fieldByName(fields, "weight")}
@@ -232,84 +268,96 @@ export default async function ProductPage({
       </div>
 
       {/* Variants */}
-      <div style={{ marginTop: 16 }}>
+      <div className="mt-4">
         <SectionCard
-          icon={<Boxes size={15} />}
+          icon={<Boxes />}
           title="Product Variants"
           count={variants.length}
         >
-          <div style={{ overflowX: "auto" }}>
-            <table>
-              <thead>
-                <tr>
-                  <th>Image</th>
-                  <th>SKU</th>
-                  <th>Title</th>
-                  <th>Price</th>
-                  <th>Qty</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {variants.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="faint">
-                      No variants yet — clustering groups supplier rows here.
-                    </td>
-                  </tr>
-                ) : (
-                  variants.map((v) => (
-                    <tr key={v.id}>
-                      <td>
-                        <span className="media-thumb">
-                          <ImageOff size={14} />
-                        </span>
-                      </td>
-                      <td>{v.supplier_rows?.supplier_sku ?? "—"}</td>
-                      <td>
-                        {v.supplier_rows?.product_name ?? title}
-                        {v.size ? ` · ${v.size}` : ""}
-                      </td>
-                      <td>
-                        {v.supplier_rows?.unit_price != null
-                          ? `$${v.supplier_rows.unit_price}`
-                          : "—"}
-                      </td>
-                      <td className="faint">—</td>
-                      <td>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Image</TableHead>
+                <TableHead>SKU</TableHead>
+                <TableHead>Title</TableHead>
+                <TableHead>Price</TableHead>
+                <TableHead>Qty</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {variants.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={7}
+                    className="text-muted-foreground/70"
+                  >
+                    No variants yet — clustering groups supplier rows here.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                variants.map((v) => (
+                  <TableRow key={v.id}>
+                    <TableCell>
+                      <span className="bg-muted text-muted-foreground flex size-9 items-center justify-center rounded-md">
+                        <ImageOff className="size-3.5" />
+                      </span>
+                    </TableCell>
+                    <TableCell>{v.supplier_rows?.supplier_sku ?? "—"}</TableCell>
+                    <TableCell>
+                      {v.supplier_rows?.product_name ?? title}
+                      {v.size ? ` · ${v.size}` : ""}
+                    </TableCell>
+                    <TableCell>
+                      {v.supplier_rows?.unit_price != null
+                        ? `$${v.supplier_rows.unit_price}`
+                        : "—"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground/70">—</TableCell>
+                    <TableCell>
+                      <span className="inline-flex items-center gap-1.5">
                         <span
-                          className={`status-dot${isPublished ? " active" : ""}`}
+                          className={
+                            isPublished
+                              ? "inline-block size-2 rounded-full bg-emerald-500"
+                              : "bg-muted-foreground/40 inline-block size-2 rounded-full"
+                          }
                         />
                         {isPublished ? "Active" : product.status}
-                      </td>
-                      <td>
-                        <div className="actions">
-                          <button className="ghost" disabled title="View">
-                            View
-                          </button>
-                          <button className="ghost" disabled title="Unlink">
-                            Unlink
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-2">
+                        <Button variant="ghost" size="sm" disabled title="View">
+                          View
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled
+                          title="Unlink"
+                        >
+                          Unlink
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
         </SectionCard>
       </div>
 
       {run && (
-        <p className="muted" style={{ fontSize: 12, marginTop: 16 }}>
+        <p className="text-muted-foreground mt-4 text-xs">
           Latest run · model {run.model ?? "—"} · prompt v
           {run.prompt_version ?? "—"} · graph {run.graph_version ?? "—"} ·{" "}
           {run.input_tokens ?? 0}+{run.output_tokens ?? 0} tokens ·{" "}
           {run.latency_ms ?? 0}ms
         </p>
       )}
-    </div>
+    </FadeIn>
   );
 }

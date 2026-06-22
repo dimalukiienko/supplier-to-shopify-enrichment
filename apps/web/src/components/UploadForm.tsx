@@ -3,6 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+
 /**
  * Uploads a supplier CSV to the BFF (POST /api/batches), then navigates to the
  * new batch view. The worker picks up the enqueued cluster_batch job.
@@ -40,17 +43,18 @@ export function UploadForm() {
   return (
     <form
       onSubmit={handleSubmit}
-      style={{ display: "flex", gap: 8, alignItems: "center" }}
+      className="flex flex-wrap items-center gap-2"
     >
-      <input
+      <Input
         type="file"
         accept=".csv"
         onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+        className="max-w-xs"
       />
-      <button type="submit" disabled={!file || busy}>
+      <Button type="submit" disabled={!file || busy}>
         {busy ? "Uploading…" : "Upload"}
-      </button>
-      {error && <span style={{ color: "var(--danger)" }}>{error}</span>}
+      </Button>
+      {error && <span className="text-destructive text-sm">{error}</span>}
     </form>
   );
 }

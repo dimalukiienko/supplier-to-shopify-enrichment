@@ -2,6 +2,9 @@ import type { BatchStatus } from "@repo/db";
 import { bffFetch } from "@/lib/bff";
 import { TrackedLink } from "@/components/TrackedLink";
 import { UploadForm } from "@/components/UploadForm";
+import { FadeIn } from "@/components/motion/FadeIn";
+import { Card } from "@/components/ui/card";
+import { StatusBadge } from "@/components/ui/status-badge";
 
 type BatchListItem = {
   id: string;
@@ -19,31 +22,43 @@ export default async function HomePage() {
   );
 
   return (
-    <main>
-      <h1>Batches</h1>
+    <FadeIn>
+      <h1 className="text-foreground mb-4 text-xl font-semibold">Batches</h1>
 
-      <div className="panel">
-        <h2 style={{ marginTop: 0 }}>Upload supplier CSV</h2>
+      <Card className="mb-4 gap-3 p-4">
+        <h2 className="text-foreground text-base font-semibold">
+          Upload supplier CSV
+        </h2>
         <UploadForm />
-      </div>
+      </Card>
 
-      <div className="panel">
+      <Card className="px-4 py-0">
         {batches.length === 0 ? (
-          <p className="muted">No batches yet — upload a CSV to get started.</p>
+          <p className="text-muted-foreground py-4">
+            No batches yet — upload a CSV to get started.
+          </p>
         ) : (
           batches.map((b) => (
-            <div className="row" key={b.id}>
+            <div
+              className="flex items-center justify-between gap-3 border-b py-2.5 last:border-b-0"
+              key={b.id}
+            >
               <div>
-                <TrackedLink href={`/batches/${b.id}`}>{b.name}</TrackedLink>
-                <div className="muted">
+                <TrackedLink
+                  href={`/batches/${b.id}`}
+                  className="text-primary font-medium hover:underline"
+                >
+                  {b.name}
+                </TrackedLink>
+                <div className="text-muted-foreground text-sm">
                   {new Date(b.created_at).toLocaleString()}
                 </div>
               </div>
-              <span className={`badge ${b.status}`}>{b.status}</span>
+              <StatusBadge status={b.status} />
             </div>
           ))
         )}
-      </div>
-    </main>
+      </Card>
+    </FadeIn>
   );
 }

@@ -9,22 +9,18 @@ import {
   Tag,
   Tags,
 } from "lucide-react";
-import { SectionCard } from "@/components/SectionCard";
 
-function SkeletonBlock({
-  className = "",
-  width,
-}: {
-  className?: string;
-  width?: string;
-}) {
-  return (
-    <span
-      className={`skeleton-block ${className}`}
-      style={width ? { width } : undefined}
-    />
-  );
-}
+import { Card } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { SectionCard } from "@/components/SectionCard";
 
 function SkeletonRows({
   count,
@@ -36,18 +32,21 @@ function SkeletonRows({
   return (
     <>
       {Array.from({ length: count }).map((_, index) => (
-        <div className="row skeleton-row" key={index}>
-          <div className="skeleton-row-copy">
-            <SkeletonBlock
-              className="skeleton-line"
-              width={index % 2 === 0 ? "220px" : "170px"}
+        <div
+          className="flex min-h-[61px] items-center justify-between gap-3 border-b py-2.5 last:border-b-0"
+          key={index}
+        >
+          <div className="flex min-w-0 flex-1 flex-col gap-2">
+            <Skeleton
+              className="h-4"
+              style={{ width: index % 2 === 0 ? "220px" : "170px" }}
             />
-            <SkeletonBlock
-              className="skeleton-line short"
-              width={index % 2 === 0 ? "130px" : "95px"}
+            <Skeleton
+              className="h-3"
+              style={{ width: index % 2 === 0 ? "130px" : "95px" }}
             />
           </div>
-          {showBadge && <SkeletonBlock className="skeleton-badge" />}
+          {showBadge && <Skeleton className="h-6 w-23 rounded-full" />}
         </div>
       ))}
     </>
@@ -56,20 +55,20 @@ function SkeletonRows({
 
 function SkeletonField({ lines = 1 }: { lines?: number }) {
   return (
-    <div className="skeleton-field">
-      <SkeletonBlock className="skeleton-line label" width="92px" />
+    <div className="flex flex-col gap-2 not-first:mt-4 not-first:border-t not-first:pt-4">
+      <Skeleton className="h-3 w-23" />
       {Array.from({ length: lines }).map((_, index) => (
-        <SkeletonBlock
-          className="skeleton-line"
+        <Skeleton
+          className="h-4"
           key={index}
-          width={index === lines - 1 ? "72%" : "100%"}
+          style={{ width: index === lines - 1 ? "72%" : "100%" }}
         />
       ))}
-      <div className="field-meta">
-        <SkeletonBlock className="skeleton-line short" width="92px" />
-        <span className="spacer" />
-        <SkeletonBlock className="skeleton-icon" />
-        <SkeletonBlock className="skeleton-icon" />
+      <div className="flex items-center gap-2">
+        <Skeleton className="h-3 w-23" />
+        <span className="flex-1" />
+        <Skeleton className="size-[30px] rounded-md" />
+        <Skeleton className="size-[30px] rounded-md" />
       </div>
     </div>
   );
@@ -77,143 +76,140 @@ function SkeletonField({ lines = 1 }: { lines?: number }) {
 
 export function BatchesPageSkeleton() {
   return (
-    <main className="page-skeleton" aria-label="Loading batches">
-      <SkeletonBlock className="skeleton-title" width="108px" />
+    <main aria-label="Loading batches">
+      <Skeleton className="mb-4 h-7 w-27" />
 
-      <div className="panel">
-        <SkeletonBlock className="skeleton-heading" width="172px" />
-        <div className="upload-skeleton-grid">
-          <SkeletonBlock className="skeleton-input" />
-          <SkeletonBlock className="skeleton-button" />
+      <Card className="mb-4 gap-3 p-4">
+        <Skeleton className="h-5 w-44" />
+        <div className="flex flex-wrap items-center gap-3">
+          <Skeleton className="h-9 min-w-45 flex-1" />
+          <Skeleton className="h-9 w-28" />
         </div>
-      </div>
+      </Card>
 
-      <div className="panel">
+      <Card className="px-4 py-0">
         <SkeletonRows count={5} />
-      </div>
+      </Card>
     </main>
   );
 }
 
 export function BatchProductsPageSkeleton() {
   return (
-    <main className="page-skeleton" aria-label="Loading batch products">
-      <SkeletonBlock className="skeleton-link" width="88px" />
-      <SkeletonBlock className="skeleton-title" width="168px" />
-      <SkeletonBlock className="skeleton-line" width="310px" />
+    <main aria-label="Loading batch products">
+      <Skeleton className="h-4 w-22" />
+      <Skeleton className="my-4 h-7 w-42" />
+      <Skeleton className="h-4 w-78" />
 
-      <div className="panel live-skeleton">
-        <SkeletonBlock className="skeleton-line" width="170px" />
-        <SkeletonBlock className="skeleton-badge" />
-      </div>
+      <Card className="my-4 flex flex-row items-center gap-3 p-4">
+        <Skeleton className="h-4 w-42" />
+        <Skeleton className="h-6 w-23 rounded-full" />
+      </Card>
 
-      <div className="panel">
+      <Card className="px-4 py-0">
         <SkeletonRows count={6} />
-      </div>
+      </Card>
     </main>
   );
 }
 
 export function SettingsPageSkeleton() {
   return (
-    <main className="page-skeleton" aria-label="Loading settings">
-      <SkeletonBlock className="skeleton-title" width="112px" />
+    <main aria-label="Loading settings">
+      <Skeleton className="mb-4 h-7 w-28" />
 
-      <div className="panel settings-skeleton">
+      <Card className="mb-4 p-4">
         <SkeletonField />
         <SkeletonField />
         <SkeletonField lines={2} />
-      </div>
+      </Card>
 
-      <SkeletonBlock className="skeleton-heading" width="118px" />
-      <div className="panel">
+      <Skeleton className="mb-3 h-5 w-30" />
+      <Card className="px-4 py-0">
         <SkeletonRows count={3} showBadge={false} />
-      </div>
+      </Card>
     </main>
   );
 }
 
 export function ProductReviewPageSkeleton() {
   return (
-    <div className="page-skeleton" aria-label="Loading product review">
-      <nav className="breadcrumb">
-        <SkeletonBlock className="skeleton-link" width="70px" />
-        <SkeletonBlock className="skeleton-icon" />
-        <SkeletonBlock className="skeleton-link" width="130px" />
-        <SkeletonBlock className="skeleton-icon" />
-        <SkeletonBlock className="skeleton-link" width="180px" />
+    <div aria-label="Loading product review">
+      <nav className="mb-4 flex flex-wrap items-center gap-1.5">
+        <Skeleton className="h-4 w-18" />
+        <Skeleton className="size-[30px] rounded-md" />
+        <Skeleton className="h-4 w-32" />
+        <Skeleton className="size-[30px] rounded-md" />
+        <Skeleton className="h-4 w-45" />
       </nav>
 
-      <div className="page-header">
-        <SkeletonBlock className="skeleton-title" width="280px" />
-        <SkeletonBlock className="skeleton-badge" />
-        <span className="spacer" />
-        <SkeletonBlock className="skeleton-icon" />
-        <SkeletonBlock className="skeleton-icon" />
+      <div className="mb-2 flex items-center gap-3">
+        <Skeleton className="h-7 w-70" />
+        <Skeleton className="h-6 w-23 rounded-full" />
+        <span className="flex-1" />
+        <Skeleton className="size-[30px] rounded-md" />
+        <Skeleton className="size-[30px] rounded-md" />
       </div>
 
-      <div className="panel parent-card">
-        <span className="parent-thumb">
-          <Package size={20} />
+      <Card className="mb-4 flex flex-row flex-wrap items-start gap-3.5 p-4">
+        <span className="bg-muted text-muted-foreground flex size-11 items-center justify-center rounded-lg">
+          <Package className="size-5" />
         </span>
-        <div className="parent-meta">
-          <SkeletonBlock className="skeleton-line short" width="116px" />
-          <SkeletonBlock className="skeleton-line" width="240px" />
-          <div className="parent-chips">
-            <SkeletonBlock className="skeleton-chip" />
-            <SkeletonBlock className="skeleton-chip" />
-            <SkeletonBlock className="skeleton-chip" />
+        <div className="min-w-50 flex-1">
+          <Skeleton className="mb-2 h-3 w-29" />
+          <Skeleton className="h-4 w-60" />
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <Skeleton className="h-6 w-30 rounded-md" />
+            <Skeleton className="h-6 w-30 rounded-md" />
+            <Skeleton className="h-6 w-30 rounded-md" />
           </div>
         </div>
-        <div className="actions">
-          <SkeletonBlock className="skeleton-button" />
-          <SkeletonBlock className="skeleton-button" />
+        <div className="flex gap-2">
+          <Skeleton className="h-8 w-28" />
+          <Skeleton className="h-8 w-28" />
         </div>
-      </div>
+      </Card>
 
-      <div className="review-grid">
-        <div className="review-col">
-          <SectionCard icon={<FileText size={15} />} title="Description">
+      <div className="grid items-start gap-4 lg:grid-cols-[1.4fr_1fr]">
+        <div className="flex min-w-0 flex-col gap-4">
+          <SectionCard icon={<FileText />} title="Description">
             <SkeletonField lines={3} />
           </SectionCard>
-          <SectionCard icon={<Store size={15} />} title="Vendor">
+          <SectionCard icon={<Store />} title="Vendor">
             <SkeletonField />
           </SectionCard>
-          <SectionCard icon={<Tag size={15} />} title="Product Type">
+          <SectionCard icon={<Tag />} title="Product Type">
             <SkeletonField />
           </SectionCard>
-          <SectionCard icon={<Tags size={15} />} title="Tags" count={4}>
-            <div className="chip-row">
-              <SkeletonBlock className="skeleton-chip" />
-              <SkeletonBlock className="skeleton-chip" />
-              <SkeletonBlock className="skeleton-chip" />
+          <SectionCard icon={<Tags />} title="Tags" count={4}>
+            <div className="flex flex-wrap gap-1.5">
+              <Skeleton className="h-6 w-30 rounded-md" />
+              <Skeleton className="h-6 w-30 rounded-md" />
+              <Skeleton className="h-6 w-30 rounded-md" />
             </div>
           </SectionCard>
-          <SectionCard
-            icon={<Search size={15} />}
-            title="Search Engine Listing"
-          >
+          <SectionCard icon={<Search />} title="Search Engine Listing">
             <SkeletonField />
             <SkeletonField lines={2} />
           </SectionCard>
         </div>
 
-        <div className="review-col">
-          <SectionCard icon={<ImageOff size={15} />} title="Product Media">
-            <div className="media-main skeleton-media">
-              <ImageOff size={28} />
-            </div>
-            <div className="media-thumbs">
-              <SkeletonBlock className="media-thumb" />
-              <SkeletonBlock className="media-thumb" />
+        <div className="flex min-w-0 flex-col gap-4">
+          <SectionCard icon={<ImageOff />} title="Product Media">
+            <Skeleton className="flex aspect-square items-center justify-center rounded-lg">
+              <ImageOff className="text-muted-foreground size-7" />
+            </Skeleton>
+            <div className="mt-2.5 flex gap-2">
+              <Skeleton className="size-12 rounded-md" />
+              <Skeleton className="size-12 rounded-md" />
             </div>
           </SectionCard>
         </div>
       </div>
 
-      <div style={{ marginTop: 16 }}>
-        <SectionCard icon={<Ruler size={15} />} title="Physical Attributes">
-          <div className="attr-grid">
+      <div className="mt-4">
+        <SectionCard icon={<Ruler />} title="Physical Attributes">
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(120px,1fr))] gap-x-4 gap-y-2">
             <SkeletonField />
             <SkeletonField />
             <SkeletonField />
@@ -221,57 +217,51 @@ export function ProductReviewPageSkeleton() {
         </SectionCard>
       </div>
 
-      <div style={{ marginTop: 16 }}>
-        <SectionCard
-          icon={<Boxes size={15} />}
-          title="Product Variants"
-          count={3}
-        >
-          <div style={{ overflowX: "auto" }}>
-            <table className="skeleton-table">
-              <thead>
-                <tr>
-                  <th>Image</th>
-                  <th>SKU</th>
-                  <th>Title</th>
-                  <th>Price</th>
-                  <th>Qty</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {Array.from({ length: 3 }).map((_, index) => (
-                  <tr key={index}>
-                    <td>
-                      <SkeletonBlock className="media-thumb" />
-                    </td>
-                    <td>
-                      <SkeletonBlock className="skeleton-line" width="86px" />
-                    </td>
-                    <td>
-                      <SkeletonBlock className="skeleton-line" width="190px" />
-                    </td>
-                    <td>
-                      <SkeletonBlock className="skeleton-line" width="54px" />
-                    </td>
-                    <td>
-                      <SkeletonBlock className="skeleton-line" width="24px" />
-                    </td>
-                    <td>
-                      <SkeletonBlock className="skeleton-line" width="74px" />
-                    </td>
-                    <td>
-                      <div className="actions">
-                        <SkeletonBlock className="skeleton-button small" />
-                        <SkeletonBlock className="skeleton-button small" />
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+      <div className="mt-4">
+        <SectionCard icon={<Boxes />} title="Product Variants" count={3}>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Image</TableHead>
+                <TableHead>SKU</TableHead>
+                <TableHead>Title</TableHead>
+                <TableHead>Price</TableHead>
+                <TableHead>Qty</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {Array.from({ length: 3 }).map((_, index) => (
+                <TableRow key={index}>
+                  <TableCell>
+                    <Skeleton className="size-9 rounded-md" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-4 w-22" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-4 w-48" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-4 w-14" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-4 w-6" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-4 w-19" />
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex gap-2">
+                      <Skeleton className="h-7 w-16" />
+                      <Skeleton className="h-7 w-16" />
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         </SectionCard>
       </div>
     </div>
