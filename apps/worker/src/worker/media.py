@@ -19,6 +19,7 @@ final backstop. No-op (returns no drafts) when web search or the LLM is disabled
 from __future__ import annotations
 
 import json
+import re
 from collections import OrderedDict
 from typing import Any
 from uuid import UUID
@@ -26,7 +27,7 @@ from uuid import UUID
 from worker import llm, web_search
 from worker.models.domain import Product, SupplierRow, Variant
 from worker.models.fields import FieldDraft
-from worker.normalize import clean_name, extract_color
+from worker.normalize import COLOR_WORDS, clean_name, extract_color
 
 # How many candidate images to verify per colour group before giving up, and the
 # minimum vision-verification confidence to accept one. Overridable via
@@ -53,8 +54,26 @@ _VERIFY_SYSTEM = (
     "plain background, false for an on-model or lifestyle scene), "
     '"confidence" (number 0-1: how sure you are this is the right, real product), '
     'and "reason" (short string). '
+    "If expected.colour is present, it is the ONLY expected colour. Ignore any "
+    "colour words that appear in expected.brand_or_name when judging right_colour. "
     "Judge only what is visible; when in doubt, set the flag to false."
 )
+
+
+def _name_without_colour_terms(name: str, color: str | None) -> str:
+    """Remove colour tokens from an item name when colour is tracked separately."""
+    if color is None:
+        return name
+
+    cleaned = name
+    for colour_word in COLOR_WORDS:
+        cleaned = re.sub(
+            rf"\b{re.escape(colour_word)}\b",
+            " ",
+            cleaned,
+            flags=re.IGNORECASE,
+        )
+    return re.sub(r"\s+", " ", cleaned).strip(' -",') or name
 
 
 def _group_variants(
@@ -83,6 +102,7 @@ def _group_query(variants: list[Variant], rows_by_id: dict[UUID, SupplierRow], b
         candidate = clean_name(row.product_name if row else None)
         if len(candidate) > len(name):
             name = candidate
+    name = _name_without_colour_terms(name, color)
     terms = " ".join(t for t in (name, color or "") if t).strip()
     # "white background" biases the image search toward clean catalogue packshots
     # over lifestyle/on-model shots, for a consistent gallery across variants.
@@ -95,7 +115,7 @@ def _verify(url: str, *, base_name: str, color: str | None, model: str) -> dict[
     Returns a record with the verdict and an `accepted` flag. Any error (e.g. an
     unreachable or blocked URL) counts as a rejection so a bad URL never wins.
     """
-    expected = {"brand_or_name": base_name, "colour": color}
+    expected = {"brand_or_name": _name_without_colour_terms(base_name, color), "colour": color}
     try:
         response = llm.complete_json_vision(
             model=model,

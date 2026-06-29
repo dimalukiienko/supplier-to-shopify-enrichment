@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
@@ -140,6 +141,36 @@ def test_ground_media_one_image_per_colour(monkeypatch: pytest.MonkeyPatch) -> N
     assert len(product_level) == 1
     assert product_level[0].value == "https://img/charcoal.jpg"
     assert trace["verified_count"] == 2
+
+
+def test_explicit_colour_overrides_conflicting_colour_in_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The variant colour is authoritative when the supplier name has a stale colour."""
+    row = _row("Yeti Rambler 14 Oz Mug Black")
+    variant = _variant(row, color="green", position=0)
+    queries: list[str] = []
+    expected_payloads: list[dict[str, Any]] = []
+
+    def fake_images(query: str, **k: Any) -> list[str]:
+        queries.append(query)
+        return ["https://img/green-yeti.jpg"]
+
+    def fake_vision(**kwargs: Any) -> LLMResponse:
+        expected_payloads.append(json.loads(kwargs["user"])["expected"])
+        return _verdict()
+
+    monkeypatch.setattr(media.web_search, "search_images", fake_images)
+    monkeypatch.setattr(media.llm, "complete_json_vision", fake_vision)
+
+    drafts, trace = media.ground_media(_product(), [variant], [row])
+
+    assert drafts
+    assert trace["verified_count"] == 1
+    assert queries == ["Yeti Rambler 14 Oz Mug green product photo white background"]
+    assert expected_payloads == [
+        {"brand_or_name": "Yeti Rambler 14 Oz Mug", "colour": "green"}
+    ]
 
 
 def test_unknown_colour_is_rejected_when_colour_expected(
