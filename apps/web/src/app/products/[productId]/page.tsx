@@ -13,7 +13,13 @@ import {
 } from "lucide-react";
 import type { ProductStatus } from "@repo/db";
 import { bffFetch } from "@/lib/bff";
-import { fieldByName, valueOf, type ReviewField } from "@/lib/productFields";
+import {
+  fieldByName,
+  firstMediaUrl,
+  valueOf,
+  variantFieldByName,
+  type ReviewField,
+} from "@/lib/productFields";
 import { SectionCard } from "@/components/SectionCard";
 import { FieldEditable } from "@/components/FieldEditable";
 import { ProductActions } from "@/components/ProductActions";
@@ -93,6 +99,8 @@ export default async function ProductPage({
 
   const title = valueOf(fields, "title") ?? "Untitled product";
   const firstRow = variants[0]?.supplier_rows ?? null;
+  // Per-variant verified image, falling back to the product-level media image.
+  const productMediaUrl = firstMediaUrl(fieldByName(fields, "media"));
   const isPublished =
     product.status === "published" || product.status === "approved";
 
@@ -297,12 +305,28 @@ export default async function ProductPage({
                   </TableCell>
                 </TableRow>
               ) : (
-                variants.map((v) => (
+                variants.map((v) => {
+                  const variantImage =
+                    firstMediaUrl(variantFieldByName(fields, v.id, "media")) ??
+                    productMediaUrl;
+                  return (
                   <TableRow key={v.id}>
                     <TableCell>
-                      <span className="bg-muted text-muted-foreground flex size-9 items-center justify-center rounded-md">
-                        <ImageOff className="size-3.5" />
-                      </span>
+                      {variantImage ? (
+                        <span className="border-border block size-9 overflow-hidden rounded-md border">
+                          {/* External candidate URLs render as plain <img>; see
+                              FieldEditable for why next/image is not used here. */}
+                          <img
+                            src={variantImage}
+                            alt="Variant media"
+                            className="size-full object-cover"
+                          />
+                        </span>
+                      ) : (
+                        <span className="bg-muted text-muted-foreground flex size-9 items-center justify-center rounded-md">
+                          <ImageOff className="size-3.5" />
+                        </span>
+                      )}
                     </TableCell>
                     <TableCell>{v.supplier_rows?.supplier_sku ?? "—"}</TableCell>
                     <TableCell>
@@ -343,7 +367,8 @@ export default async function ProductPage({
                       </div>
                     </TableCell>
                   </TableRow>
-                ))
+                  );
+                })
               )}
             </TableBody>
           </Table>

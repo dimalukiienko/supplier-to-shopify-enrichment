@@ -52,8 +52,6 @@ def test_research_facts_extracts_vendor_barcode_and_specs(
                                    url="https://rapala.com/f11",
                                    content="Rapala F11 UPC 0022677012345, 6g, 11cm")],
     )
-    # Media disabled here so the test isolates the text-extraction facts.
-    monkeypatch.setattr(web_search, "search_images", lambda *a, **k: [])
 
     canned = {
         "vendor": {"value": "Rapala", "confidence": 0.95, "url": "https://rapala.com/f11"},
@@ -78,34 +76,12 @@ def test_research_facts_extracts_vendor_barcode_and_specs(
     assert by_field["weight"]["value"] == "6 g"
 
 
-def test_research_facts_grounds_media(monkeypatch: pytest.MonkeyPatch) -> None:
-    """search_images URLs surface as one newline-joined `media` fact."""
-    monkeypatch.setattr(
-        web_search, "search",
-        lambda *a, **k: [WebResult(title="t", url="u", content="c")],
-    )
-    monkeypatch.setattr(
-        web_search, "search_images",
-        lambda *a, **k: ["https://img/1.jpg", "https://img/2.jpg"],
-    )
-    monkeypatch.setattr(
-        llm, "complete_json",
-        lambda **k: LLMResponse(content={}, model="gpt-4o-mini"),
-    )
-
-    facts = research.research_facts(_product(), _rows())
-    media = next(f for f in facts if f["field_name"] == "media")
-    assert media["source"] == "web"
-    assert media["value"] == "https://img/1.jpg\nhttps://img/2.jpg"
-
-
 def test_research_facts_skips_null_values(monkeypatch: pytest.MonkeyPatch) -> None:
     """A field the model could not ground (null) is dropped."""
     monkeypatch.setattr(
         web_search, "search",
         lambda *a, **k: [WebResult(title="t", url="u", content="c")],
     )
-    monkeypatch.setattr(web_search, "search_images", lambda *a, **k: [])
     canned = {
         "vendor": {"value": "Rapala", "confidence": 0.9, "url": "u"},
         "barcode": None,

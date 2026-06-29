@@ -1,9 +1,10 @@
 """Thin OpenAI structured-output client — the single LLM seam.
 
-All model calls in the graph go through `complete_json`, so switching providers
-later (the stack also permits Anthropic) is a change confined to this module.
-The call uses JSON-object response mode and returns the parsed payload together
-with token/latency telemetry that `persist` writes to `runs`.
+All model calls in the graph go through `complete_json` (text) or
+`complete_json_vision` (text + one image), so switching providers later (the
+stack also permits Anthropic) is a change confined to this module. Both use
+JSON-object response mode and return the parsed payload together with
+token/latency telemetry that `persist` writes to `runs`.
 """
 
 from __future__ import annotations
@@ -62,6 +63,46 @@ def complete_json(
     )
     latency_ms = int((time.monotonic() - started) * 1000)
 
+    return _to_response(completion, latency_ms)
+
+
+def complete_json_vision(
+    *,
+    model: str,
+    system: str,
+    user: str,
+    image_url: str,
+    temperature: float = 0.0,
+) -> LLMResponse:
+    """Call a vision model in JSON-object mode with `user` text + one image.
+
+    Used to verify that a candidate product image actually depicts the right
+    item/colour (and is a real photo). `system`/`user` must instruct the model to
+    emit a single JSON object. The default model `gpt-4o-mini` is vision-capable.
+    """
+    client = get_client()
+    started = time.monotonic()
+    completion = client.chat.completions.create(
+        model=model,
+        temperature=temperature,
+        response_format={"type": "json_object"},
+        messages=[
+            {"role": "system", "content": system},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": user},
+                    {"type": "image_url", "image_url": {"url": image_url}},
+                ],
+            },
+        ],
+    )
+    latency_ms = int((time.monotonic() - started) * 1000)
+    return _to_response(completion, latency_ms)
+
+
+def _to_response(completion: Any, latency_ms: int) -> LLMResponse:
+    """Parse a chat completion into an `LLMResponse`, asserting a JSON object."""
     raw = completion.choices[0].message.content or "{}"
     content = json.loads(raw)
     if not isinstance(content, dict):

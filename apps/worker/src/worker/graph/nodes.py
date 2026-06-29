@@ -20,6 +20,7 @@ import json
 from typing import Any
 
 from worker import llm
+from worker import media as media_tool
 from worker import research as research_tool
 from worker.models.fields import FieldDraft, FieldSource
 from worker.models.graph_state import GraphState
@@ -60,6 +61,16 @@ def research(state: GraphState) -> GraphState:
             if "field_name" in f
         ],
     }
+
+    # Verified, colour-aware product/variant images (kept separate from text
+    # facts: see GraphState.media_drafts). The trace records every candidate's
+    # accept/reject reason for reviewer provenance.
+    guardrails = state.settings.guardrail_config if state.settings else {}
+    media_drafts, media_trace = media_tool.ground_media(
+        state.product, state.variants, state.supplier_rows, model=model, config=guardrails
+    )
+    state.media_drafts = media_drafts
+    state.node_traces["media"] = media_trace
     return state
 
 
@@ -256,7 +267,9 @@ def assemble(state: GraphState) -> GraphState:
     for d in drafts:
         if d.field_name not in best or d.confidence > best[d.field_name].confidence:
             best[d.field_name] = d
-    state.drafts = list(best.values())
+    # Verified media drafts are pre-deduped and variant-scoped, so they bypass the
+    # product-level dedupe above and carry their own verification threshold.
+    state.drafts = list(best.values()) + list(state.media_drafts)
 
     state.node_traces["assemble"] = {
         "field_count": len(state.drafts),

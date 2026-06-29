@@ -22,12 +22,16 @@ class FieldDraft(BaseModel):
 
     Grounded facts from the research node are tagged `source="web"`; ungrounded
     model output is `source="llm"` (docs/ARCHITECTURE.md §5.2).
+
+    `variant_id` is normally `None` (product-scoped). The media grounding step
+    sets it to attach a verified image to a specific variant's colourway.
     """
 
     field_name: str
     value: str | None = None
     confidence: float = Field(ge=0.0, le=1.0)
     source: FieldSource = "llm"
+    variant_id: UUID | None = None
 
 
 class EnrichedField(BaseModel):

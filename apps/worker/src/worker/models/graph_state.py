@@ -28,6 +28,10 @@ class GraphState(BaseModel):
     # Working data
     research_facts: list[dict[str, Any]] = Field(default_factory=list)
     drafts: list[FieldDraft] = Field(default_factory=list)
+    # Verified product/variant image drafts (one per colour group; product-level
+    # plus per-variant). Kept separate from `drafts` so they bypass the
+    # product-level dedupe/guardrails and carry their own verification threshold.
+    media_drafts: list[FieldDraft] = Field(default_factory=list)
 
     # Observability
     node_traces: dict[str, Any] = Field(default_factory=dict)

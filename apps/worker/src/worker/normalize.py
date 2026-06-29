@@ -16,6 +16,60 @@ SIZE_SET = set(SIZE_ORDER)
 # A size token attached to the end of a product name, e.g. "... TEE BLACK L".
 NAME_SIZE_RE = re.compile(r"\b(XS|S|M|L|XL|XXL|[2-5]XL)\s*$", re.IGNORECASE)
 
+# Known colour words used to derive the colourway from a raw name when the
+# `variants.color` column is unset, so image grounding can target the right
+# colourway (and tell the vision verifier the expected colour). Multi-word
+# colours come first so they win over their single-word substrings.
+COLOR_WORDS = [
+    "off white",
+    "light blue",
+    "dark blue",
+    "navy blue",
+    "light grey",
+    "dark grey",
+    "light gray",
+    "dark gray",
+    "black",
+    "white",
+    "grey",
+    "gray",
+    "charcoal",
+    "navy",
+    "blue",
+    "red",
+    "green",
+    "olive",
+    "khaki",
+    "tan",
+    "beige",
+    "cream",
+    "brown",
+    "yellow",
+    "orange",
+    "pink",
+    "purple",
+    "burgundy",
+    "maroon",
+    "teal",
+    "gold",
+    "silver",
+]
+
+
+def extract_color(name: str | None) -> str | None:
+    """Best-effort colourway from a raw product name, or None when absent.
+
+    Matches the first known colour word (longest phrases first) as a whole word,
+    case-insensitively; returns it lower-cased for a stable query/compare token.
+    """
+    if not name:
+        return None
+    lowered = name.lower()
+    for color in COLOR_WORDS:
+        if re.search(rf"\b{re.escape(color)}\b", lowered):
+            return color
+    return None
+
 
 def extract_size(sku: str | None, name: str | None) -> str | None:
     """Best-effort apparel size for a row, from the SKU suffix then the name."""
