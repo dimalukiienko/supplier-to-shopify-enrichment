@@ -80,7 +80,7 @@ A standalone Python worker that performs the actual enrichment. It is decoupled 
 
 ### 5.1 Job poller
 
-The worker pulls work with `SELECT … FOR UPDATE SKIP LOCKED`, allowing multiple worker instances to process the queue concurrently without double-processing a job.
+The worker pulls work with `SELECT … FOR UPDATE SKIP LOCKED`, allowing multiple worker instances to process the queue concurrently without double-processing a job. A single instance also runs `CONCURRENCY` (default 4) independent claim→process loops, each on its own DB connection, so one process can advance several I/O-bound jobs at once; the same row-locking keeps those loops from colliding.
 
 ### 5.2 Processing pipeline
 

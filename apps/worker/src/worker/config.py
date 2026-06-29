@@ -23,6 +23,11 @@ class WorkerConfig(BaseSettings):
     web_search_api_key: str = ""
     poll_interval_seconds: float = 2.0
     batch_size: int = 1
+    # How many jobs one worker process runs at once. Each unit is an independent
+    # claim→process loop with its own DB connection; `FOR UPDATE SKIP LOCKED`
+    # keeps them from double-processing. 1 keeps the original single-loop
+    # behavior. Set via the `CONCURRENCY` env var.
+    concurrency: int = 4
     # When true, exit once the queue is empty instead of polling forever
     # (handy for one-shot local runs: `WORKER_DRAIN=true uv run worker`).
     drain: bool = False
