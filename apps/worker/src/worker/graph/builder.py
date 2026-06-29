@@ -11,6 +11,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Any
 
+from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
@@ -47,6 +48,19 @@ def build_graph() -> EnrichmentGraph:
 
 
 def run_graph(state: GraphState) -> GraphState:
-    """Run the compiled enrichment graph over an input state."""
-    result = build_graph().invoke(state)
+    """Run the compiled enrichment graph over an input state.
+
+    Passes run name + metadata so that, when LangSmith tracing is enabled, each
+    trace links back to the same identifiers as the persisted `runs` row. The
+    metadata is harmless (and ignored) when tracing is off.
+    """
+    run_config: RunnableConfig = {
+        "run_name": "enrich_product",
+        "metadata": {
+            "product_id": str(state.product.id),
+            "batch_id": str(state.product.batch_id),
+            "graph_version": GRAPH_VERSION,
+        },
+    }
+    result = build_graph().invoke(state, config=run_config)
     return GraphState.model_validate(result)

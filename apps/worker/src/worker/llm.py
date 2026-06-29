@@ -14,10 +14,23 @@ import time
 from functools import lru_cache
 from typing import Any
 
+import openai
 from openai import OpenAI
 from pydantic import BaseModel
 
 from worker.config import WorkerConfig
+from worker.observability import tracing_enabled
+
+# Transient OpenAI failures worth retrying the *job* over rather than failing it
+# outright: a saturated rate limit, or a brief upstream/network blip. The client
+# already retries each individual call (see `config.openai_max_retries`); these
+# are the errors that survive that and should re-queue the job (see the poller).
+RETRYABLE_ERRORS: tuple[type[Exception], ...] = (
+    openai.RateLimitError,
+    openai.APITimeoutError,
+    openai.APIConnectionError,
+    openai.InternalServerError,
+)
 
 
 class LLMResponse(BaseModel):
@@ -32,10 +45,21 @@ class LLMResponse(BaseModel):
 
 @lru_cache(maxsize=1)
 def get_client() -> OpenAI:
-    """Build a cached OpenAI client from the worker config / environment."""
+    """Build a cached OpenAI client from the worker config / environment.
+
+    When LangSmith tracing is enabled (see `worker.observability`) the client is
+    wrapped so each completion is traced with its prompt, response, and token
+    usage; the wrapper is transparent, so callers use `.chat.completions.create`
+    unchanged.
+    """
     config = WorkerConfig()
     api_key = config.openai_api_key or None
-    return OpenAI(api_key=api_key)
+    client = OpenAI(api_key=api_key, max_retries=config.openai_max_retries)
+    if tracing_enabled():
+        from langsmith.wrappers import wrap_openai
+
+        return wrap_openai(client)
+    return client
 
 
 def complete_json(

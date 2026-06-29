@@ -80,7 +80,9 @@ A standalone Python worker that performs the actual enrichment. It is decoupled 
 
 ### 5.1 Job poller
 
-The worker pulls work with `SELECT … FOR UPDATE SKIP LOCKED`, allowing multiple worker instances to process the queue concurrently without double-processing a job. A single instance also runs `CONCURRENCY` (default 4) independent claim→process loops, each on its own DB connection, so one process can advance several I/O-bound jobs at once; the same row-locking keeps those loops from colliding.
+The worker pulls work with `SELECT … FOR UPDATE SKIP LOCKED`, allowing multiple worker instances to process the queue concurrently without double-processing a job.
+
+Model calls are made resilient to the provider's tokens-per-minute budget at two levels: the OpenAI client retries each call with exponential backoff (honouring the rate-limit reset headers; `OPENAI_MAX_RETRIES`, default 8), and a transient failure that still surfaces — rate-limit saturation or a brief upstream/network blip — returns the job to the queue (resetting its position) to be retried later rather than failing it. A job fails for good only on a non-transient error or once it has exhausted `MAX_ATTEMPTS` (default 5).
 
 ### 5.2 Processing pipeline
 
@@ -133,6 +135,7 @@ Every enrichment field from the brief is **accounted for** by the generic `enric
 
 - **Promptfoo evals → prompts / graph** — offline evaluation of prompts and graph behavior against the dataset.
 - **LangGraph tracing → runs / traces** — each enrichment run is traced and persisted to `runs` (with node-level traces, model, token counts, and latency), giving end-to-end observability into what the AI produced and why.
+- **LangSmith tracing (optional)** — when enabled (`LANGSMITH_TRACING=true` + an API key), the worker additionally streams each LangGraph run to LangSmith: node spans plus the underlying OpenAI calls (prompts, completions, tokens), tagged with `product_id`/`graph_version` so a trace lines up with its `runs` row. This is *additive developer tooling* for debugging and eval datasets — the `runs` table remains the persisted source of truth for reviewer provenance. Off by default, so no data leaves the system unless opted in.
 
 ---
 

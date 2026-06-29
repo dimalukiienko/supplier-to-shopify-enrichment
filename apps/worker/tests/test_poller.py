@@ -1,15 +1,14 @@
-"""Poller tests — concurrent claim/drain behaviour with the DB and the
+"""Poller tests — drain and per-job outcome behaviour with the DB and the
 processing pipeline stubbed (no live DB, no network).
 
-The real claim query and `_process_job` are exercised elsewhere; here we verify
-that `run_forever` fans work out across `concurrency` loops, processes every job
-exactly once (no double-claim), and drains cleanly without hanging.
+The real claim query and graph are exercised elsewhere; here we verify that
+`run_forever` drains the queue in FIFO order without hanging, and that
+`_process_job` requeues transient failures while failing everything else.
 """
 
 from __future__ import annotations
 
 import threading
-import time
 from contextlib import contextmanager
 from typing import Any
 from uuid import UUID, uuid4
@@ -21,7 +20,7 @@ from worker.config import WorkerConfig
 
 
 class _JobSource:
-    """Thread-safe source of queued job rows; hands each out once, then None."""
+    """Source of queued job rows; hands each out once, then None."""
 
     def __init__(self, job_ids: list[UUID]) -> None:
         self._rows = [
@@ -34,11 +33,9 @@ class _JobSource:
             }
             for jid in job_ids
         ]
-        self._lock = threading.Lock()
 
     def next_row(self) -> dict[str, Any] | None:
-        with self._lock:
-            return self._rows.pop(0) if self._rows else None
+        return self._rows.pop(0) if self._rows else None
 
 
 class _FakeCursor:
@@ -76,26 +73,20 @@ class _FakeConn:
         pass
 
 
-def _install(
-    monkeypatch: pytest.MonkeyPatch, source: _JobSource, *, process_delay: float = 0.0
-) -> tuple[list[UUID], threading.Lock]:
-    """Wire fake connections + a recording `_process_job`; return the record sink."""
+def _install(monkeypatch: pytest.MonkeyPatch, source: _JobSource) -> list[UUID]:
+    """Wire a fake connection + a recording `_process_job`; return the record sink."""
     processed: list[UUID] = []
-    record_lock = threading.Lock()
 
     @contextmanager
     def fake_connect(_url: str) -> Any:
         yield _FakeConn(source)
 
-    def fake_process(conn: Any, job: poller.ClaimedJob) -> None:
-        if process_delay:
-            time.sleep(process_delay)
-        with record_lock:
-            processed.append(job.id)
+    def fake_process(config: WorkerConfig, conn: Any, job: poller.ClaimedJob) -> None:
+        processed.append(job.id)
 
     monkeypatch.setattr(poller, "connect", fake_connect)
     monkeypatch.setattr(poller, "_process_job", fake_process)
-    return processed, record_lock
+    return processed
 
 
 def _run_with_timeout(config: WorkerConfig, timeout: float = 5.0) -> None:
@@ -106,42 +97,122 @@ def _run_with_timeout(config: WorkerConfig, timeout: float = 5.0) -> None:
     assert not thread.is_alive(), "run_forever did not drain within the timeout"
 
 
-def test_concurrent_drain_processes_each_job_once(monkeypatch: pytest.MonkeyPatch) -> None:
-    job_ids = [uuid4() for _ in range(12)]
-    source = _JobSource(job_ids)
-    processed, _ = _install(monkeypatch, source, process_delay=0.01)
-
-    config = WorkerConfig(
-        database_url="fake", concurrency=4, drain=True, poll_interval_seconds=0.01
-    )
-    _run_with_timeout(config)
-
-    # Every job handled exactly once — no drops, no double-claims.
-    assert sorted(processed) == sorted(job_ids)
-    assert len(processed) == len(set(processed))
-
-
-def test_single_loop_drains_in_order(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_drains_in_order(monkeypatch: pytest.MonkeyPatch) -> None:
     job_ids = [uuid4() for _ in range(5)]
     source = _JobSource(job_ids)
-    processed, _ = _install(monkeypatch, source)
+    processed = _install(monkeypatch, source)
 
-    config = WorkerConfig(
-        database_url="fake", concurrency=1, drain=True, poll_interval_seconds=0.01
-    )
+    config = WorkerConfig(database_url="fake", drain=True, poll_interval_seconds=0.01)
     _run_with_timeout(config)
 
-    # One loop preserves the FIFO claim order it had before concurrency existed.
+    # The loop preserves the FIFO claim order.
     assert processed == job_ids
 
 
 def test_empty_queue_drains_immediately(monkeypatch: pytest.MonkeyPatch) -> None:
     source = _JobSource([])
-    processed, _ = _install(monkeypatch, source)
+    processed = _install(monkeypatch, source)
 
-    config = WorkerConfig(
-        database_url="fake", concurrency=4, drain=True, poll_interval_seconds=0.01
-    )
+    config = WorkerConfig(database_url="fake", drain=True, poll_interval_seconds=0.01)
     _run_with_timeout(config)
 
     assert processed == []
+
+
+class _RecordingCursor:
+    """Cursor that records every executed statement (for asserting job outcome)."""
+
+    def __init__(self, log: list[tuple[str, Any]]) -> None:
+        self._log = log
+
+    def execute(self, sql: str, params: Any = None) -> None:
+        self._log.append((sql, params))
+
+    def fetchone(self) -> None:
+        return None
+
+    def __enter__(self) -> _RecordingCursor:
+        return self
+
+    def __exit__(self, *exc: object) -> bool:
+        return False
+
+
+class _RecordingConn:
+    def __init__(self) -> None:
+        self.statements: list[tuple[str, Any]] = []
+        self.rolled_back = False
+
+    @contextmanager
+    def transaction(self) -> Any:
+        yield
+
+    def cursor(self) -> _RecordingCursor:
+        return _RecordingCursor(self.statements)
+
+    def rollback(self) -> None:
+        self.rolled_back = True
+
+
+def _rate_limit_error() -> Exception:
+    """A real `openai.RateLimitError` (one of the poller's RETRYABLE_ERRORS)."""
+    import httpx
+    import openai
+
+    response = httpx.Response(429, request=httpx.Request("POST", "https://api.openai.com"))
+    return openai.RateLimitError("rate limited", response=response, body=None)
+
+
+def _enrich_job(attempts: int = 0) -> poller.ClaimedJob:
+    return poller.ClaimedJob(
+        id=uuid4(), type="enrich_product", product_id=uuid4(), batch_id=None, attempts=attempts
+    )
+
+
+def _stub_graph(monkeypatch: pytest.MonkeyPatch, exc: Exception) -> None:
+    """Make `fetch_inputs` a no-op and `run_graph` raise `exc`."""
+
+    def _raise(*_args: Any, **_kwargs: Any) -> Any:
+        raise exc
+
+    monkeypatch.setattr(poller, "fetch_inputs", lambda _conn, _pid: object())
+    monkeypatch.setattr(poller, "run_graph", _raise)
+
+
+def _outcome_sql(conn: _RecordingConn) -> str:
+    return " ".join(sql for sql, _ in conn.statements)
+
+
+def test_transient_error_requeues_job(monkeypatch: pytest.MonkeyPatch) -> None:
+    conn = _RecordingConn()
+    _stub_graph(monkeypatch, _rate_limit_error())
+
+    poller._process_job(WorkerConfig(max_attempts=5), conn, _enrich_job(attempts=0))
+
+    sql = _outcome_sql(conn)
+    assert "status = 'queued'" in sql  # back on the queue, not failed
+    assert "status = 'failed'" not in sql
+    assert conn.rolled_back
+
+
+def test_transient_error_fails_once_attempts_exhausted(monkeypatch: pytest.MonkeyPatch) -> None:
+    conn = _RecordingConn()
+    _stub_graph(monkeypatch, _rate_limit_error())
+
+    # attempts=4 → this is the 5th and final try under max_attempts=5.
+    poller._process_job(WorkerConfig(max_attempts=5), conn, _enrich_job(attempts=4))
+
+    sql = _outcome_sql(conn)
+    assert "status = 'failed'" in sql
+    assert "status = 'queued'" not in sql
+
+
+def test_non_transient_error_fails_immediately(monkeypatch: pytest.MonkeyPatch) -> None:
+    conn = _RecordingConn()
+    _stub_graph(monkeypatch, ValueError("bad data"))
+
+    poller._process_job(WorkerConfig(max_attempts=5), conn, _enrich_job(attempts=0))
+
+    sql = _outcome_sql(conn)
+    assert "status = 'failed'" in sql
+    assert "status = 'queued'" not in sql
