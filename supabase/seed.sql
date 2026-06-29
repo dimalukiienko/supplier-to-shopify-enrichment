@@ -5,7 +5,7 @@ insert into public.settings (title_template, default_model, guardrail_config)
 values (
   '[{"token":"Brand"},{"token":"Size"},{"token":"Name"}]'::jsonb,
   'gpt-4o-mini',
-  '{"min_confidence":0.4,"require_grounded_barcode":true}'::jsonb
+  '{"min_confidence":0.4,"require_grounded_barcode":true,"media_min_confidence":0.7,"media_max_candidates":6}'::jsonb
 );
 
 insert into public.prompt_versions (name, version, content, is_active) values

@@ -50,9 +50,16 @@ def persist_results(conn: DictConnection, state: GraphState, job_id: UUID) -> No
         for draft in state.drafts:
             cur.execute(
                 "INSERT INTO enriched_fields "
-                "(product_id, field_name, value, confidence, source, status) "
-                "VALUES (%s, %s, %s, %s, %s, 'ai')",
-                (product_id, draft.field_name, draft.value, draft.confidence, draft.source),
+                "(product_id, variant_id, field_name, value, confidence, source, status) "
+                "VALUES (%s, %s, %s, %s, %s, %s, 'ai')",
+                (
+                    product_id,
+                    draft.variant_id,
+                    draft.field_name,
+                    draft.value,
+                    draft.confidence,
+                    draft.source,
+                ),
             )
 
         cur.execute(

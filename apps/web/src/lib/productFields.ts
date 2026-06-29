@@ -47,6 +47,26 @@ export function fieldByName(
   return fields.find((f) => f.field_name === name && f.variant_id === null);
 }
 
+/** Field scoped to a specific variant (e.g. that variant's verified media). */
+export function variantFieldByName(
+  fields: ReviewField[],
+  variantId: string,
+  name: string,
+): ReviewField | undefined {
+  return fields.find(
+    (f) => f.field_name === name && f.variant_id === variantId,
+  );
+}
+
+/** First image URL of a media field value (newline-separated), or null. */
+export function firstMediaUrl(field?: ReviewField): string | null {
+  const url = (field?.value ?? "")
+    .split("\n")
+    .map((u) => u.trim())
+    .find(Boolean);
+  return url ?? null;
+}
+
 /** Raw value for a field name, or null when not yet enriched. */
 export function valueOf(fields: ReviewField[], name: string): string | null {
   return fieldByName(fields, name)?.value ?? null;

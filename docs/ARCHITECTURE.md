@@ -18,7 +18,7 @@ The system is organized into six layers:
 | **BFF API** | Next.js route handlers | Backend-for-frontend; thin API over Supabase, enqueues work |
 | **Data layer** | Supabase (Postgres) | Tables, job queue, run/trace records, settings, Realtime |
 | **Enrichment worker** | Python + LangGraph | Polls the job queue and runs the enrichment graph |
-| **External** | OpenAI, Tavily web research | LLM calls; web research grounds vendor, barcode, physical specs + candidate media (`source = web`) |
+| **External** | OpenAI, Tavily web research | LLM calls (incl. vision image verification); web research grounds vendor, barcode, physical specs + verified product/variant images (`source = web`) |
 | **Mocked (Stage 1)** | Shopify Admin API | Publishing — approve/push wired but does not hit live Shopify |
 | **Evals & observability** | Promptfoo, LangGraph tracing | Prompt/graph evaluation and run tracing |
 
@@ -89,7 +89,7 @@ For each job the worker runs the following stages:
 1. **Preprocessing** — normalize fields, strip size tokens, and cluster scattered supplier rows that represent the same product into one product with variants.
 2. **Fetch** — load the inputs it needs: `products`, `variants`, `supplier_rows`, `settings`, and `prompt_versions`.
 3. **LangGraph graph** — the enrichment pipeline:
-   `parse → research → draft → validate → assemble`. The `parse` and `draft` nodes call the model in **structured-output (JSON-schema) mode**, so every field is returned against a fixed contract carrying `value`, `confidence`, and `source` — which is exactly what is persisted per row into `enriched_fields`. The `research` node calls a **web/search tool** to look up brand, specs, and barcode for thin rows; grounded facts feed the `draft` node and are written with `source = web`, while ungrounded model output is `source = llm`.
+   `parse → research → draft → validate → assemble`. The `parse` and `draft` nodes call the model in **structured-output (JSON-schema) mode**, so every field is returned against a fixed contract carrying `value`, `confidence`, and `source` — which is exactly what is persisted per row into `enriched_fields`. The `research` node calls a **web/search tool** to look up brand, specs, and barcode for thin rows; grounded facts feed the `draft` node and are written with `source = web`, while ungrounded model output is `source = llm`. The same `research` node also grounds **product/variant images**: a colour-aware image search whose candidates are each **vision-verified** (right item, right colour, real photo) before one is attached per product and per variant.
 4. **Guardrails** — schema validation, anti-hallucination checks, and confidence scoring applied to the graph output.
 5. **Persist** — write results back to `enriched_fields`, `runs`, `jobs`, and `products`.
 
@@ -104,7 +104,8 @@ The enrichment is implemented as a **single LangGraph graph** with discrete node
 ## 6. External / mocked services
 
 - **LLM provider (OpenAI)** — invoked by the LangGraph nodes for parsing, drafting, and validation. (The mandated stack permits OpenAI or Anthropic.)
-- **Web / product research (Tavily)** — a search tool called by the `research` node to look up brand, specs, barcode, and product images for thin rows. Stage 1 grounds **vendor, barcode, and physical specs (weight/dimensions/pack qty)**: the node runs a web search, then a focused LLM extraction pulls verified facts (value/confidence/url) from the snippets — **never estimating**, so unsupported specs stay empty. A separate image search surfaces top-N candidate gallery URLs as one `media` fact. Grounded facts override the `draft` node and are tagged `source = web` in `enriched_fields`, with citation URLs recorded in `runs.node_traces.research`. Disabled (no-op) when `WEB_SEARCH_API_KEY` is unset. Exact-variant image matching remains deferred.
+- **Web / product research (Tavily)** — a search tool called by the `research` node to look up brand, specs, barcode, and product images for thin rows. Stage 1 grounds **vendor, barcode, and physical specs (weight/dimensions/pack qty)**: the node runs a web search, then a focused LLM extraction pulls verified facts (value/confidence/url) from the snippets — **never estimating**, so unsupported specs stay empty. Grounded facts override the `draft` node and are tagged `source = web` in `enriched_fields`, with citation URLs recorded in `runs.node_traces.research`. Disabled (no-op) when `WEB_SEARCH_API_KEY` is unset.
+- **Product/variant image grounding (`worker.media`)** — runs inside the `research` node. Variants are grouped by colourway (colour-aware: size-only variants share one image, distinct colours get their own); for each group a Tavily image search yields candidates that are **each verified by a vision model** for: right item, **right colour** (strict — an unsure/`null` verdict is rejected when a colour is expected, so a generic image can't bleed across colourways), **real product photograph** (not AI-generated, render, illustration, or unrelated), and **good quality** (clear, in-focus, not blurry/tiny/watermarked). The group keeps the **best** passer — a clean catalogue *packshot* is preferred over an on-model/lifestyle shot, then highest confidence — for a consistent gallery across variants. Passers must clear `guardrail_config.media_min_confidence`. The best verified image per colour is attached to its variants and the first verified group seeds the product-level image (`media` rows, `source = web`, `variant_id` set); a group with **no** verified candidate is **left empty** rather than risk a wrong image, for the reviewer to fill. Every candidate's accept/reject reason is recorded in `runs.node_traces.media` for provenance. The vision model (overridable via `guardrail_config.media_vision_model`) is a strong heuristic for "real / right colour", not a guarantee, so the human review gate remains the final backstop. No-op when web search or the LLM is unavailable.
 - **Shopify Admin API (2026-01)** — **mocked in Stage 1 (P5)**. The approve/push path is wired but does not hit live Shopify.
 
 ### Field-level build-vs-defer scope (Stage 1)
@@ -122,9 +123,8 @@ Every enrichment field from the brief is **accounted for** by the generic `enric
 | Variants (size grouping) | **Built** | Clustering + `variants` table; required to show grouping logic. |
 | SEO meta title + description | **Partial** | Drafted but lightly validated; lower review risk in Stage 1. |
 | Weight / dimensions / pack qty | **Built (grounded-only)** | Web-grounded via the `research` node (`source = web`); **no LLM estimation** — fields stay empty for thin/obscure SKUs and the reviewer fills gaps. |
-| Product media (product-level candidates) | **Built (grounded-only)** | Image search surfaces top-N candidate gallery URLs as one `media` field (`source = web`) the reviewer confirms. |
+| Product media (verified, per product + variant) | **Built (grounded + vision-verified)** | Colour-aware image search; each candidate is vision-verified (right item/colour, real photo) before one is attached per product and per variant (`source = web`). No verified candidate → left empty. |
 | Collections | **Deferred** | Distinct from tags/type; needs a store taxonomy not modeled in Stage 1. |
-| Product images — exact-variant matching | **Deferred** | Per-variant image matching is high-effort and high-risk; out of the timebox (product-level candidates *are* built, above). |
 | Variants by size + color | **Deferred (designed)** | `variants.color` exists; dataset is size-only, so color grouping is schema-ready but not exercised. |
 
 ---

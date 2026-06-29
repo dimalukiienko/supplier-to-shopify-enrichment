@@ -89,6 +89,32 @@ def test_graph_records_node_traces() -> None:
     assert result.node_traces["draft"]["input_tokens"] == 12
 
 
+def test_graph_appends_verified_media(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verified media drafts (product + per-variant) flow through assemble."""
+    from worker.graph import nodes
+
+    state = _state()
+    variant_id = state.variants[0].id
+
+    def fake_ground(product, variants, supplier_rows, *, model="gpt-4o-mini", config=None):  # type: ignore[no-untyped-def]
+        drafts = [
+            nodes.FieldDraft(field_name="media", value="https://img/ok.jpg",
+                             confidence=0.93, source="web"),
+            nodes.FieldDraft(field_name="media", value="https://img/ok.jpg",
+                             confidence=0.93, source="web", variant_id=variant_id),
+        ]
+        return drafts, {"verified_count": 1, "group_count": 1, "groups": []}
+
+    monkeypatch.setattr(nodes.media_tool, "ground_media", fake_ground)
+
+    result = run_graph(state)
+    media_drafts = [d for d in result.drafts if d.field_name == "media"]
+    assert len(media_drafts) == 2
+    assert {d.variant_id for d in media_drafts} == {None, variant_id}
+    assert all(d.source == "web" for d in media_drafts)
+    assert result.node_traces["media"]["verified_count"] == 1
+
+
 def test_graph_grounds_vendor_and_barcode(monkeypatch: pytest.MonkeyPatch) -> None:
     """Grounded web facts override vendor and add a barcode draft (source='web')."""
     from worker.graph import nodes

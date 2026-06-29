@@ -10,14 +10,12 @@ specs **weight / dimensions / pack_qty** via a two-step flow:
    of the search snippets, **only** from the supplied results (no guessing — the
    specs stay `null` for thin/obscure SKUs rather than being estimated).
 
-It also grounds product **media** with a separate image search
-(`web_search.search_images`), surfacing the top candidate image URLs as one
-`media` fact (newline-joined value) for the reviewer to confirm — product-level
-candidates, not exact-variant image matching.
+Product/variant **media** is grounded separately in `worker.media` (verified,
+colour-aware, per-variant), invoked alongside this from the research node.
 
-When no `WEB_SEARCH_API_KEY` is set, `web_search.search`/`search_images` return
-nothing, so this falls back to a no-op (the Stage-1 deferral default) and
-downstream drafts stay `source="llm"`.
+When no `WEB_SEARCH_API_KEY` is set, `web_search.search` returns nothing, so this
+falls back to a no-op (the Stage-1 deferral default) and downstream drafts stay
+`source="llm"`.
 
 A fact is a dict: ``{"field_name": str, "value": str, "confidence": float,
 "source": "web", "url": str}``.
@@ -34,9 +32,6 @@ from worker.models.domain import Product, SupplierRow
 # Fields we attempt to ground from the web (ARCHITECTURE §6). Physical specs are
 # web-grounded only — never LLM-estimated — so they stay empty when unsupported.
 GROUNDED_FIELDS = ["vendor", "barcode", "weight", "dimensions", "pack_qty"]
-
-# Number of candidate product images to surface for reviewer confirmation.
-MEDIA_RESULTS = 3
 
 _EXTRACT_SYSTEM = (
     "You extract verified product facts from web search results for a Shopify "
@@ -105,20 +100,6 @@ def research_facts(
                 "confidence": confidence,
                 "source": "web",
                 "url": str(raw.get("url", "")),
-            }
-        )
-
-    # Product media: a separate image search surfaces candidate gallery URLs the
-    # reviewer confirms. One `media` fact holds the top-N URLs (newline-joined).
-    image_urls = web_search.search_images(query, max_results=MEDIA_RESULTS)
-    if image_urls:
-        facts.append(
-            {
-                "field_name": "media",
-                "value": "\n".join(image_urls),
-                "confidence": 0.6,
-                "source": "web",
-                "url": "",
             }
         )
 
