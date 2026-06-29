@@ -63,9 +63,11 @@ task dev          # web → http://localhost:3000  +  enrichment worker
 Supabase dashboard yourself; everything else in `.env` is annotated in
 `.env.example`.
 
-> The graph nodes, BFF handlers, and review UI are scaffolded but still stubbed
-> in this Stage 1 slice — see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for
-> what is built vs. deferred.
+> The Stage 1 vertical slice is implemented end to end: upload, queue,
+> enrichment graph, reviewer UI, approve/push flow, and mocked Shopify publish.
+> Some later-stage surfaces are still deferred, especially richer eval datasets,
+> prompt-management UI, and a dedicated observability UI. See
+> [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for what is built vs. deferred.
 
 ## Tasks
 
